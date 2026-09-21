@@ -7,6 +7,8 @@ import {JobEscrow} from "../src/JobEscrow.sol";
 import {IJobEscrow} from "../src/interfaces/IJobEscrow.sol";
 import {IAgentPassport} from "../src/interfaces/IAgentPassport.sol";
 import {MockUSDC, MockIdentityRegistry, MockReputationRegistry} from "../src/mocks/Mocks.sol";
+import {P256} from "../src/libraries/P256.sol";
+import {WebAuthn} from "../src/libraries/WebAuthn.sol";
 
 /// @dev Shared fixture: mock ERC-8004 registries, mock USDC, one registered agent, one funded hirer.
 abstract contract BaseTest is Test {
@@ -65,5 +67,53 @@ abstract contract BaseTest is Test {
     function _deliver(uint256 jobId) internal {
         vm.prank(agentWallet);
         escrow.deliver(jobId, keccak256("deliverable"), "ipfs://deliverable");
+    }
+
+    // ───────────── signing helpers (shared by unit + fork tests) ─────────────
+
+    /// @dev EIP-3009 ReceiveWithAuthorization signature for `token` (FiatToken domain: name/version
+    ///      read from the token, chainid, token address). `to` is always the escrow.
+    function _signReceiveAuth(
+        address token,
+        uint256 signerKey,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce
+    ) internal view returns (bytes memory sig) {
+        bytes32 domain = MockUSDC(token).DOMAIN_SEPARATOR(); // same selector on real FiatToken
+        bytes32 structHash = keccak256(
+            abi.encode(
+                MockUSDC(token).RECEIVE_WITH_AUTHORIZATION_TYPEHASH(),
+                vm.addr(signerKey),
+                to,
+                value,
+                validAfter,
+                validBefore,
+                nonce
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked(hex"1901", domain, structHash));
+        (uint8 v, bytes32 r, bytes32 s_) = vm.sign(signerKey, digest);
+        sig = abi.encodePacked(r, s_, v);
+    }
+
+    /// @dev Builds a WebAuthn assertion over `challenge` with a P256 key, flags UP|UV, low-s.
+    function _passkeyAssertion(uint256 p256Key, bytes32 challenge)
+        internal
+        pure
+        returns (bytes memory authData, bytes memory clientDataJSON, uint256 r, uint256 s_)
+    {
+        authData = abi.encodePacked(sha256("agentfromzero.netlify.app"), uint8(0x05), uint32(1));
+        clientDataJSON = abi.encodePacked(
+            '{"type":"webauthn.get","challenge":"',
+            WebAuthn._base64Url(challenge),
+            '","origin":"https://agentfromzero.netlify.app","crossOrigin":false}'
+        );
+        bytes32 msgHash = sha256(abi.encodePacked(authData, sha256(clientDataJSON)));
+        (bytes32 rb, bytes32 sb) = vm.signP256(p256Key, msgHash);
+        r = uint256(rb);
+        s_ = uint256(sb) > P256.N_DIV_2 ? P256.N - uint256(sb) : uint256(sb);
     }
 }

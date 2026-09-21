@@ -200,20 +200,4 @@ contract JobEscrowTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(IJobEscrow.NoPasskey.selector, hirer));
         escrow.releaseWithPasskey(jobId, "", "", 1, 1);
     }
-
-    /// @dev TODO(milestone 1): end-to-end passkey release with a real WebAuthn vector.
-    ///      Needs: P256 key pair, authenticatorData, clientDataJSON containing
-    ///      base64url(escrow.releaseDigest(jobId)), low-s signature. Run under `--network monad`
-    ///      so the 0x0100 precompile is live.
-    function test_releaseWithPasskey_validAssertion() public {
-        vm.skip(true);
-    }
-
-    // ───────────── EIP-3009 ─────────────
-
-    /// @dev TODO(milestone 1): openWithAuthorization against a fork of Monad testnet USDC
-    ///      (0x534b2f3A21130d7a60830c2Df862319e593943A3) with a signed ReceiveWithAuthorization.
-    function test_openWithAuthorization_fork() public {
-        vm.skip(true);
-    }
 }

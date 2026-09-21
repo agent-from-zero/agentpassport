@@ -15,9 +15,11 @@ import {P256} from "./P256.sol";
 ///           4. the P256 signature verifies against the registered public key.
 ///         Origin / rpIdHash are NOT checked on-chain (v0): the challenge already binds the
 ///         assertion to one job and one contract, which is what the escrow needs.
-/// @dev v0 implementation. Treat as untrusted until `test/WebAuthn.t.sol` passes against real
-///      authenticator vectors (Windows Hello / iCloud Keychain / YubiKey) — milestone 1 task.
-///      Alternative considered: vendoring Solady's WebAuthn.sol (MIT) once vectors exist.
+/// @dev Verified in `test/WebAuthn.t.sol` against real Safari and Chrome passkey assertions (the
+///      vectors Solady / Coinbase Smart Wallet use) plus fuzzed assertions signed with Foundry's
+///      P256 signer; high-s twins, wrong challenge/type/key and missing UP/UV are all rejected.
+///      Deliberately minimal (substring checks, no JSON parser): the challenge is a fixed 43-char
+///      base64url token, so there is no escaping surface to exploit.
 library WebAuthn {
     uint8 internal constant FLAG_UP = 0x01;
     uint8 internal constant FLAG_UV = 0x04;

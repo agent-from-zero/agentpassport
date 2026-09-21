@@ -3,18 +3,70 @@ pragma solidity ^0.8.28;
 
 import {IIdentityRegistry, IReputationRegistry} from "../interfaces/IERC8004.sol";
 
-/// @dev Minimal mintable ERC-20 with 6 decimals, standing in for Circle USDC in local tests.
+/// @dev Minimal mintable ERC-20 with 6 decimals + EIP-3009 `receiveWithAuthorization`, standing in
+///      for Circle USDC in local tests. Same EIP-712 domain shape as FiatToken ("USDC", "2") so the
+///      test signing helper is identical for the mock and the real token on a fork.
 ///      Not for deployment: Monad testnet has real Circle USDC (0x534b2f3A21130d7a60830c2Df862319e593943A3).
 contract MockUSDC {
     string public constant name = "USDC";
     string public constant symbol = "USDC";
+    string public constant version = "2";
     uint8 public constant decimals = 6;
     uint256 public totalSupply;
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
+    mapping(address => mapping(bytes32 => bool)) public authorizationState;
+
+    bytes32 public constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH =
+        0xd099cc98ef71107a616c4f0f941f04c322d8e254fe26b3c6668db87aae413de8;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
+    event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce);
+
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
+                block.chainid,
+                address(this)
+            )
+        );
+    }
+
+    /// @dev Mirrors FiatTokenV2_2 semantics: `to` must be the caller, window checked, nonce single-use,
+    ///      65-byte r||s||v signature.
+    function receiveWithAuthorization(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        bytes calldata signature
+    ) external {
+        require(to == msg.sender, "FiatTokenV2: caller must be the payee");
+        require(block.timestamp > validAfter, "FiatTokenV2: authorization is not yet valid");
+        require(block.timestamp < validBefore, "FiatTokenV2: authorization is expired");
+        require(!authorizationState[from][nonce], "FiatTokenV2: authorization is used or canceled");
+        require(signature.length == 65, "ECRecover: invalid signature length");
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                hex"1901",
+                DOMAIN_SEPARATOR(),
+                keccak256(
+                    abi.encode(RECEIVE_WITH_AUTHORIZATION_TYPEHASH, from, to, value, validAfter, validBefore, nonce)
+                )
+            )
+        );
+        (bytes32 r, bytes32 s, uint8 v) = (bytes32(signature[0:32]), bytes32(signature[32:64]), uint8(signature[64]));
+        require(ecrecover(digest, v, r, s) == from, "FiatTokenV2: invalid signature");
+        authorizationState[from][nonce] = true;
+        emit AuthorizationUsed(from, nonce);
+        _move(from, to, value);
+    }
 
     function mint(address to, uint256 amount) external {
         totalSupply += amount;
@@ -28,7 +80,7 @@ contract MockUSDC {
         return true;
     }
 
-    function transfer(address to, uint256 amount) external returns (bool) {
+    function transfer(address to, uint256 amount) external virtual returns (bool) {
         _move(msg.sender, to, amount);
         return true;
     }
