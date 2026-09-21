@@ -32,7 +32,7 @@ contract Deploy is Script {
 
         vm.startBroadcast(deployerKey);
         AgentPassport passport = new AgentPassport(cfg.identityRegistry, cfg.reputationRegistry);
-        JobEscrow escrow = new JobEscrow(cfg.identityRegistry, address(passport));
+        JobEscrow escrow = new JobEscrow(cfg.identityRegistry, address(passport), cfg.usdc);
         passport.setAttester(address(escrow), true);
         vm.stopBroadcast();
 

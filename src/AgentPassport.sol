@@ -28,6 +28,8 @@ contract AgentPassport is IAgentPassport {
 
     error NotOwner();
 
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
@@ -44,6 +46,7 @@ contract AgentPassport is IAgentPassport {
         _identity = IIdentityRegistry(identityRegistry_);
         _reputation = IReputationRegistry(reputationRegistry_);
         owner = msg.sender;
+        emit OwnershipTransferred(address(0), msg.sender);
     }
 
     // ───────────────────────────── admin ─────────────────────────────
@@ -55,7 +58,9 @@ contract AgentPassport is IAgentPassport {
         emit AttesterSet(attester, allowed);
     }
 
+    /// @notice Hands admin to a timelock / multisig, or to address(0) to freeze the attester set.
     function transferOwnership(address newOwner) external onlyOwner {
+        emit OwnershipTransferred(owner, newOwner);
         owner = newOwner;
     }
 

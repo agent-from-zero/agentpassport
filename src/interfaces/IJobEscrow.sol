@@ -70,10 +70,15 @@ interface IJobEscrow {
     error InvalidPasskeySignature();
     error UnknownAgent(uint256 agentId);
     error NoAgentWallet(uint256 agentId);
+    error UnsupportedToken(address token);
+    error AuthorizationMismatch(bytes32 expectedNonce, bytes32 givenNonce);
+    error InvalidPasskey();
 
     /// @notice Parameters for opening a job.
     /// @param agentId  Agent to hire (must exist in the ERC-8004 IdentityRegistry).
-    /// @param token    Settlement token (USDC on Monad testnet: 0x534b2f3A21130d7a60830c2Df862319e593943A3).
+    /// @param token    Settlement token; must equal `settlementToken()` (Circle USDC on Monad testnet:
+    ///                 0x534b2f3A21130d7a60830c2Df862319e593943A3). Pinning one token stops a griefer from
+    ///                 binding an agent's passport to a junk token via an expired job.
     /// @param amount   Escrowed amount in token units.
     /// @param deadline Unix time after which the hirer can refund an undelivered job.
     /// @param reviewWindow Seconds after delivery in which the hirer may dispute; after it passes,
@@ -94,6 +99,9 @@ interface IJobEscrow {
 
     /// @notice An EIP-3009 `receiveWithAuthorization` signed by the hirer (same signature type
     ///         x402's "exact" EVM scheme uses). `to` is implicitly the escrow contract.
+    /// @dev `nonce` MUST equal `openNonce(p, validAfter, validBefore)`: the nonce is the only
+    ///      free field in the EIP-3009 message, so binding it to the job parameters is what stops
+    ///      a relayer from spending the hirer's signature on a different agent, amount or spec.
     struct Authorization {
         address from;
         uint256 validAfter;
@@ -107,7 +115,12 @@ interface IJobEscrow {
 
     /// @notice Same as `open`, funded by an EIP-3009 authorization signed by `auth.from` (the hirer).
     ///         The caller (relayer / the agent itself) pays gas; the hirer needs no MON.
+    ///         Reverts with `AuthorizationMismatch` unless `auth.nonce == openNonce(p, ...)`.
     function openWithAuthorization(OpenParams calldata p, Authorization calldata auth) external returns (uint256 jobId);
+
+    /// @notice The EIP-3009 nonce a hirer must sign with so that the authorization can only fund
+    ///         exactly this job (chain, escrow, all OpenParams, validity window).
+    function openNonce(OpenParams calldata p, uint256 validAfter, uint256 validBefore) external view returns (bytes32);
 
     /// @notice Agent (owner, operator or agentWallet of `agentId`) submits the deliverable hash.
     function deliver(uint256 jobId, bytes32 deliverableHash, string calldata deliverableURI) external;
@@ -147,4 +160,6 @@ interface IJobEscrow {
     function jobCount() external view returns (uint256);
     function passport() external view returns (address);
     function identityRegistry() external view returns (address);
+    /// @notice The single settlement token this escrow accepts (Circle USDC on Monad).
+    function settlementToken() external view returns (address);
 }

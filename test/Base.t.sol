@@ -31,7 +31,7 @@ abstract contract BaseTest is Test {
         reputation = new MockReputationRegistry(identity);
         usdc = new MockUSDC();
         passport = new AgentPassport(address(identity), address(reputation));
-        escrow = new JobEscrow(address(identity), address(passport));
+        escrow = new JobEscrow(address(identity), address(passport), address(usdc));
         passport.setAttester(address(escrow), true);
 
         vm.startPrank(agentOwner);
