@@ -1,0 +1,40 @@
+{
+  "name": "Monad Testnet",
+  "chainId": 10143,
+  "currency": "MON",
+  "rpc": {
+    "primary": "https://testnet-rpc.monad.xyz",
+    "ws": "wss://testnet-rpc.monad.xyz",
+    "alternatives": ["https://rpc.ankr.com/monad_testnet", "https://rpc-testnet.monadinfra.com"]
+  },
+  "explorers": {
+    "monadvision": "https://testnet.monadvision.com",
+    "monadscan": "https://testnet.monadscan.com"
+  },
+  "faucets": {
+    "mon": "https://faucet.monad.xyz",
+    "usdc": "https://faucet.circle.com"
+  },
+  "erc8004": {
+    "identityRegistry": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    "reputationRegistry": "0x8004B663056A597Dffe9eCcC1965A193B7388713",
+    "source": "https://github.com/erc-8004/erc-8004-contracts#monad-testnet"
+  },
+  "tokens": {
+    "usdc": "0x534b2f3A21130d7a60830c2Df862319e593943A3",
+    "usdcDecimals": 6,
+    "usdcEip712": { "name": "USDC", "version": "2" },
+    "wmon": "0xFb8bf4c1CC7a94c73D209a149eA2AbEa852BC541"
+  },
+  "x402": {
+    "network": "eip155:10143",
+    "facilitator": "https://x402-facilitator.molandak.org",
+    "exactPermit2Proxy": "0x402085c248EeA27D92E8b30b2C58ed07f9E20001",
+    "uptoPermit2Proxy": "0x4020A4f3b7b90ccA423B9fabCc0CE57C6C240002"
+  },
+  "precompiles": {
+    "p256Verify": "0x0000000000000000000000000000000000000100"
+  },
+  "verifiedAt": "2026-09-21",
+  "verifiedHow": "docs.monad.xyz/developer-essentials/testnet + eth_getCode on each address via testnet-rpc.monad.xyz"
+}

@@ -1,0 +1,10 @@
+{
+  "monad-testnet": {
+    "chainId": 10143,
+    "AgentPassport": null,
+    "JobEscrow": null,
+    "deployedAt": null,
+    "deployTx": null,
+    "note": "Filled in by the first broadcast of script/Deploy.s.sol. Contract addresses + tx hashes are required by the hackathon submission (rules 4.1 / 9.2)."
+  }
+}
