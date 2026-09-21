@@ -7,12 +7,13 @@ import {JobEscrow} from "../src/JobEscrow.sol";
 
 /// @title Deploy — AgentPassport + JobEscrow on Monad testnet (chain id 10143)
 /// @notice Reads the deployer key from the DEPLOYER_PRIVATE_KEY env var (never from a file in the
-///         repo) and the canonical ERC-8004 registry addresses from deploy/monad-testnet.json.
+///         repo) and the canonical ERC-8004 registry + USDC addresses from deploy/monad-testnet.json.
 ///
 ///   forge script script/Deploy.s.sol:Deploy --rpc-url monad_testnet --broadcast
 ///
-/// After broadcasting, copy the printed addresses into deploy/addresses.json (committed) so the
-/// SDK, the app and the README all read the same source of truth.
+/// On broadcast the script writes the new addresses into deploy/addresses.json (committed), which
+/// the SDK, the app and the README read as the single source of truth. Tx hashes are in
+/// broadcast/Deploy.s.sol/10143/run-latest.json.
 contract Deploy is Script {
     struct NetworkConfig {
         uint256 chainId;
@@ -39,7 +40,9 @@ contract Deploy is Script {
         console.log("AgentPassport:", address(passport));
         console.log("JobEscrow:    ", address(escrow));
         console.log("USDC (Circle):", cfg.usdc);
-        console.log("Next: record addresses in deploy/addresses.json and verify sources on testnet.monadvision.com");
+
+        _record(address(passport), address(escrow), deployer);
+        console.log("Recorded in deploy/addresses.json; verify sources next (see deploy/README.md).");
     }
 
     function _loadConfig() internal view returns (NetworkConfig memory cfg) {
@@ -48,5 +51,18 @@ contract Deploy is Script {
         cfg.identityRegistry = vm.parseJsonAddress(json, ".erc8004.identityRegistry");
         cfg.reputationRegistry = vm.parseJsonAddress(json, ".erc8004.reputationRegistry");
         cfg.usdc = vm.parseJsonAddress(json, ".tokens.usdc");
+    }
+
+    function _record(address passport, address escrow, address deployer) internal {
+        string memory path = string.concat(vm.projectRoot(), "/deploy/addresses.json");
+        string memory obj = "monad-testnet";
+        vm.serializeUint(obj, "chainId", block.chainid);
+        vm.serializeAddress(obj, "AgentPassport", passport);
+        vm.serializeAddress(obj, "JobEscrow", escrow);
+        vm.serializeAddress(obj, "deployer", deployer);
+        vm.serializeUint(obj, "deployedAtBlock", block.number);
+        string memory inner = vm.serializeUint(obj, "deployedAt", block.timestamp);
+        string memory outer = vm.serializeString("root", "monad-testnet", inner);
+        vm.writeJson(outer, path);
     }
 }

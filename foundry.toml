@@ -12,7 +12,7 @@ via_ir = false
 # Monad execution environment (gas model, opcode pricing, precompiles incl. P256 at 0x0100).
 # Requires Foundry >= 1.8.0. See https://docs.monad.xyz/tooling-and-infra/toolkits/foundry
 network = "monad"
-fs_permissions = [{ access = "read", path = "./deploy" }]
+fs_permissions = [{ access = "read-write", path = "./deploy" }]
 
 [fmt]
 line_length = 120

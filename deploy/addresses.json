@@ -1,10 +1,10 @@
 {
   "monad-testnet": {
+    "AgentPassport": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A",
+    "JobEscrow": "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
     "chainId": 10143,
-    "AgentPassport": null,
-    "JobEscrow": null,
-    "deployedAt": null,
-    "deployTx": null,
-    "note": "Filled in by the first broadcast of script/Deploy.s.sol. Contract addresses + tx hashes are required by the hackathon submission (rules 4.1 / 9.2)."
+    "deployedAt": 1789979930,
+    "deployedAtBlock": 64403471,
+    "deployer": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28"
   }
 }
