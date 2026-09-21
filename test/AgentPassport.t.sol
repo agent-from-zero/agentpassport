@@ -84,11 +84,4 @@ contract AgentPassportTest is BaseTest {
         p2.attest(agentId, keccak256("j"), IAgentPassport.Outcome.Settled, address(usdc), 1, hirer, "x");
         assertEq(p2.passportOf(agentId).jobsSettled, 1);
     }
-
-    /// @dev TODO(milestone 1): fork test against the real Monad testnet ReputationRegistry
-    ///      (0x8004B663056A597Dffe9eCcC1965A193B7388713) to confirm the exact giveFeedback ABI and
-    ///      that the passport address is accepted as a client (not owner/operator).
-    function test_fork_giveFeedback_realRegistry() public {
-        vm.skip(true);
-    }
 }
