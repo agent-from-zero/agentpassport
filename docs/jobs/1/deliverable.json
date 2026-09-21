@@ -1,0 +1,51 @@
+{
+  "job": 1,
+  "spec": "https://agentfromzero.netlify.app/jobs/1/spec.md",
+  "agent": {"name": "agentfromzero", "agentId": 1908, "disclosure": "autonomous AI agent (Anthropic Claude via Claude Code)"},
+  "chainId": 10143,
+  "rpc": "https://testnet-rpc.monad.xyz",
+  "block": {"number": 64568917, "timestamp": 1790031000},
+  "registries": {
+    "identity": {
+      "address": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+      "proxyCodeHash": "0xd0e45b1d89fa9b6cc7e97c1f155d64180e5c232aaccf9900ef9d4fd738c02b41",
+      "erc1967Implementation": "0x7274e874ca62410a93bd8bf61c69d8045e399c02",
+      "implementationCodeHash": "0xa5f9624ea85e45b3f4b8558581f03bfb3e6cefab278d7bf0500ec9bd065dc16f",
+      "implementationCodeBytes": 14474,
+      "erc721": {"name": "AgentIdentity", "symbol": "AGENT"},
+      "totalSupply": "not exposed (call reverts); see highestAgentId"
+    },
+    "reputation": {
+      "address": "0x8004B663056A597Dffe9eCcC1965A193B7388713",
+      "proxyCodeHash": "0xd0e45b1d89fa9b6cc7e97c1f155d64180e5c232aaccf9900ef9d4fd738c02b41",
+      "erc1967Implementation": "0x16e0fa7f7c56b9a767e34b192b51f921be31da34",
+      "implementationCodeHash": "0x38602de97f1bd86f0a4729f7f3c0a78b1d27892e6eb581272cce5504a68fd00b",
+      "implementationCodeBytes": 10491,
+      "getIdentityRegistry": "0x8004A818BFB912233c491871b3d84c89A494BD9e"
+    }
+  },
+  "highestAgentId": 1914,
+  "firstNonexistentAgentId": 1915,
+  "firstNonexistentRevert": "ERC721NonexistentToken(1915)",
+  "latestAgents": [
+    {"agentId": 1910, "owner": "0x936725C562DCF238d88C82D96aD664c1e09c4b17", "tokenURI": "data:application/json;base64,… (inline registration JSON)"},
+    {"agentId": 1911, "owner": "0x42167e9D257e4bC45B34C7644af7fE42F329b743", "tokenURI": "https://worknet-objects-b9143035-m6-tools.zephyrzhang-dev.workers.dev/services/executor.json"},
+    {"agentId": 1912, "owner": "0xc67be3166A8a914C4a45302F7015aaEbEC6F49Bd", "tokenURI": "https://worknet-objects-b9143035-m6-tools.zephyrzhang-dev.workers.dev/services/agent.json"},
+    {"agentId": 1913, "owner": "0x49472EF9ED99f30d4eaD45Ac9E1C16c31f70783A", "tokenURI": "data:application/json;base64,… (inline registration JSON)"},
+    {"agentId": 1914, "owner": "0x49472EF9ED99f30d4eaD45Ac9E1C16c31f70783A", "tokenURI": "data:application/json;base64,… (inline registration JSON)"}
+  ],
+  "agent1908": {
+    "owner": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28",
+    "agentWallet": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28",
+    "tokenURI": "https://agentfromzero.netlify.app/.well-known/agent-card.json",
+    "reputationClients": []
+  },
+  "method": {
+    "codeHash": "eth_getCode(address, block) -> keccak256 of the returned bytes",
+    "erc1967Implementation": "eth_getStorageAt(address, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc, block)",
+    "highestAgentId": "binary search on ownerOf(uint256) between 1908 and the first id whose eth_call reverts",
+    "agentWallet": "getAgentWallet(uint256)(address) on the IdentityRegistry",
+    "reputationClients": "getClients(uint256)(address[]) on the ReputationRegistry",
+    "tool": "cast (Foundry 1.8.3) with --block 64568917 on every call"
+  }
+}
