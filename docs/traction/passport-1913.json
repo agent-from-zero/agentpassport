@@ -1,0 +1,77 @@
+{
+    "agentId": "1913",
+    "chainId": 10143,
+    "agentPassport": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A",
+    "passport": {
+        "jobsSettled": "0",
+        "jobsRefunded": "0",
+        "jobsDisputed": "0",
+        "firstSeen": "0",
+        "lastSettled": "0",
+        "volumeSettled": "0",
+        "token": "0x0000000000000000000000000000000000000000"
+    },
+    "meetsProven": false,
+    "index": {
+        "score": 0,
+        "scoreBreakdown": {
+            "activity": 0,
+            "volume": 0,
+            "diversity": 0,
+            "repeat": 0,
+            "reliability": 0,
+            "disputePenalty": 0,
+            "concentrationPenalty": 0,
+            "cappedAt": null
+        },
+        "settledHirers": 0,
+        "repeatHirers": 0,
+        "topHirerShareBps": 0,
+        "feedback": {
+            "count": 0,
+            "escrowBacked": 0,
+            "revoked": 0,
+            "escrowBackedShareBps": 0
+        },
+        "avgDeliverySeconds": 0,
+        "onTimeDeliveries": 0,
+        "jobs": {
+            "opened": 0,
+            "delivered": 0,
+            "settled": 0,
+            "refunded": 0,
+            "disputed": 0
+        },
+        "nansen": {
+            "coverage": "nansen",
+            "weightedHirers": 0,
+            "linkedHirers": 0,
+            "flagged": [],
+            "owner": {
+                "visible": true,
+                "footprintUsd": 1.2,
+                "chains": [
+                    "monad"
+                ],
+                "firstFunder": null
+            },
+            "hirers": []
+        },
+        "meta": {
+            "source": "https://agentfromzero.netlify.app/agentpassport/index.json",
+            "indexer": "Envio HyperIndex 3.12.1 (RPC source)",
+            "mode": "self-hosted (docker compose: Postgres + Hasura GraphQL + rpc-proxy + indexer)",
+            "block": {
+                "number": 64984982,
+                "time": "2026-09-23T09:56:14+00:00"
+            },
+            "generatedAt": "2026-09-23T09:56:16.297Z",
+            "nansen": {
+                "provider": "Nansen API (profiler: first-funder, current-balance, related-wallets)",
+                "addressesProfiled": 12,
+                "note": "Nansen covers mainnets (incl. Monad mainnet), not Monad testnet: a wallet that only ever lived on testnet has no Nansen history, so it cannot count as a weighted hirer."
+            }
+        }
+    },
+    "fullScorecard": "POST /v1/agent/verify (x402, $0.001 USDC on Monad testnet)"
+}

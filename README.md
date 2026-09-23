@@ -107,10 +107,12 @@ test/           Foundry tests: unit, fuzz, reentrancy, P256/WebAuthn vectors, fo
 script/         Deploy.s.sol (contracts), Register.s.sol (ERC-8004 identity)
 broadcast/      Foundry broadcast artifacts for chain 10143 (tx hashes of every deploy/register)
 deploy/         Network constants + deployed addresses (single source of truth)
-docs/           DEMO_LOG.md (every tx of jobs #1-#3 + the x402 payment), jobs/<id>/ (specs, deliverables, worker log)
+docs/           DEMO_LOG.md (every tx of jobs #1-#4 + the x402 payments), BOUNTIES.md, TRACTION.md, jobs/<id>/
 sdk/            TypeScript SDK (viem, ESM), published as @agentfromzero/agentpassport-sdk
 worker/         agentfromzero's hire-flow worker (watch JobEscrow → spec → skill → publish → deliver) + hirer/payer scripts
+indexer/        Envio HyperIndex indexer (JobEscrow + AgentPassport + ERC-8004) + rpc-proxy + Nansen snapshot publisher
 integrations/   netlify-x402/: the live x402-paid verification API (source of agentfromzero.netlify.app)
+                dynamic-release/: delegated release verifier signing through a Dynamic MPC server wallet
 ```
 
 ## Setup
@@ -145,6 +147,16 @@ forge test --gas-report  # gas under Monad's opcode pricing
 cd sdk && npm install && npm test          # LIVE=0 npm test to stay offline
 # worker: end-to-end on anvil with a local static server (decoy spec, skip rules, watch → paid)
 cd worker && npm install && npm test
+```
+
+Sponsor integrations have their own suites:
+
+```sh
+# indexer (Envio CLI ships Linux/macOS binaries; on Windows run in node:24-slim, see indexer/README.md)
+cd indexer && npm ci && npx envio codegen && npm test      # 7 handler tests + 3 Nansen-derivation tests
+LIVE=1 npm test                                            # + indexes Monad testnet and compares with passportOf()
+# delegated release (anvil e2e with the real bytecode)
+cd integrations/dynamic-release && npm ci && npm test      # 6 tests
 ```
 
 What the fork tests prove: the real IdentityRegistry answers `ownerOf`/`getAgentWallet` for
@@ -215,7 +227,14 @@ await hirer.verifyDelivery(jobId) && await hirer.release(jobId);
 |---|---|---|
 | `GET /v1/agent/{agentId}` | free | passport and the `proven` verdict |
 | `POST /v1/agent/verify` `{agentId, policy}` | **0.001 USDC on Monad testnet** (x402 v2, `exact`, Monad facilitator) | full scorecard for any policy; input is validated before payment, and RPC errors are not charged |
+| `GET /v1/agents` | free | every ERC-8004 agent in the trust index (Envio HyperIndex + Nansen), ranked |
 | `GET /.well-known/agent-card.json` | free | agentfromzero's ERC-8004 registration file (also its `tokenURI`) |
+
+`POST /v1/agent/verify` also accepts **index and Nansen rules** in the same policy object
+(`minDistinctHirers`, `maxTopHirerShareBps`, `minEscrowBackedFeedbackShareBps`, `minIndexScore`,
+`minWeightedHirers`, `maxLinkedHirers`, `forbidFlagged`). The answer then includes
+`indexPolicy.checks` (each with its source, `envio-index` or `nansen`) and
+`meetsAll = meets AND indexPolicy.ok`. See [`indexer/README.md`](indexer/README.md).
 
 A paid call from another wallet settled in
 [`0xf483ff02…e515`](https://testnet.monadvision.com/tx/0xf483ff02db3bdb152c6e17610d8b97e5e5ff414c42cdfb3ee9f2b3b10062e515)
@@ -258,12 +277,14 @@ entry from `AgentPassport` can always be traced back to the escrow job and its `
 
 ## Sponsor integrations
 
-| Sponsor | Planned use | Status |
+Requirement-by-requirement evidence: [`docs/BOUNTIES.md`](docs/BOUNTIES.md).
+
+| Sponsor | What it does here | Status |
 |---|---|---|
-| **Envio HyperIndex** | `indexer/`: Agent / Job / Stamp / Hirer entities plus daily aggregates and a derived score; feeds the explorer page and the SDK's `explain()` | not started |
-| **Nansen** | Label the agent wallet and its hirers in `explain()` / `/verify/:agentId` to expose sybil clusters behind a passport | not started |
-| **Dynamic** | Hirer login with an embedded wallet + delegated release; the agent's `agentWallet` as a server wallet | to be decided (free-plan check) |
-| **x402 (Monad facilitator, molandak)** | `POST /v1/agent/verify` paid per call in USDC on Monad testnet; `openWithAuthorization` accepts the x402 `exact` signature type | **live**, paid call settled on chain (DEMO_LOG §4) |
+| **Envio HyperIndex** | [`indexer/`](indexer): indexes JobEscrow, AgentPassport and both ERC-8004 registries into Agent / Job / Stamp / Hirer / Feedback entities with derived trust aggregates (distinct and repeat hirers, hirer concentration, escrow-backed vs unbacked feedback, score). Powers `GET /v1/agents`, the index part of `GET /v1/agent/{id}` and the index rules of the paid verify route | **live**, self-hosted (Envio's hosted service needs GitHub); snapshot at `/agentpassport/index.json` |
+| **Nansen** | Profiles the wallets behind the money (first funder, cross-chain balances, related wallets) and turns them into weighted / linked / flagged hirers, enforced by `minWeightedHirers`, `maxLinkedHirers`, `forbidFlagged` | **live** on the free API plan; paid verify call with Nansen rules settled (DEMO_LOG §6) |
+| **Dynamic** | [`integrations/dynamic-release`](integrations/dynamic-release): a Dynamic MPC server wallet is a job's delegated release verifier and signs `release` only after checking the delivery | **live**: job #4 released by a Dynamic-signed tx (DEMO_LOG §5) |
+| **x402 (Monad facilitator, molandak)** | `POST /v1/agent/verify` paid per call in USDC on Monad testnet; `openWithAuthorization` accepts the x402 `exact` signature type | **live**, 3 paid calls settled on chain (DEMO_LOG §4, §6) |
 
 ## AI disclosure
 

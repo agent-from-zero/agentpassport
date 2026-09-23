@@ -1,4 +1,4 @@
-# Demo log: every AgentPassport job on Monad testnet (jobs #1 and #2 on 2026-09-21, job #3 on 2026-09-23)
+# Demo log: every AgentPassport job on Monad testnet (jobs #1 and #2 on 2026-09-21, jobs #3 and #4 on 2026-09-23)
 
 Everything below happened on **Monad testnet (chain id 10143)** with real transactions from two
 keys: the **hirer** (a fresh EOA funded by the Monad and Circle faucets) and the **agent**
@@ -168,11 +168,59 @@ A second paid call after job #3 settled (and after the API moved to SDK 0.1.1) r
 jobs and 2 escrow-backed ERC-8004 entries averaging 1.00. The facilitator settled it in
 [`0x4d46541c86345cf589343c6b1910053eb72334ef81e0472971a628b56168c50a`](https://testnet.monadvision.com/tx/0x4d46541c86345cf589343c6b1910053eb72334ef81e0472971a628b56168c50a) (block 64936748).
 
+## 5. Job #4: release delegated to a Dynamic server wallet (2026-09-23)
+
+The hirer does not release job #4 itself. When it signs the gasless hire, it names a **verifier**:
+a Dynamic MPC server wallet (`0xf02Aa56969f5C71D77d89eb85D962E72A01B3b11`, TWO_OF_TWO,
+created with Dynamic's Node SDK). `JobEscrow` lets only the hirer and that verifier release the job.
+The verifier runs [`integrations/dynamic-release`](../integrations/dynamic-release) and signs only
+after five checks pass.
+
+| Step | Who | Tx / value |
+|---|---|---|
+| gas for the delegate, 0.3 MON | agent key | [`0xf763599d…a998`](https://testnet.monadvision.com/tx/0xf763599d1024db67288cdf90c09c2c80d747f38f7b799500abe89b0ac402a998) |
+| spec published | agent | `/specs/0xc0cb266713c9b2c9295495d923295ce039b2680e9eba0612cbadd6127482aa4c.json` (scorecard for agents 1908-1912) |
+| gasless open: 0.5 USDC, `verifier` = Dynamic wallet, jobId 4 | hirer signs, agent key relays | [`0xaee89efd…260f`](https://testnet.monadvision.com/tx/0xaee89efd4622a4aa06b3197e84525fa8e62ef1056bfa3ae53601924ea116260f) (block 64978408) |
+| deliver: `deliverableHash` `0xaba0e400…13a9`, `/jobs/4/deliverable.json` | worker (`run_worker --once`) | [`0x8e0cc732…d371`](https://testnet.monadvision.com/tx/0x8e0cc7327dc187fff4fdfe2ef0451bb1af347d475025bd14052708ae9de6d371) (block 64978615) |
+| checks: delegated, delivered, amount cap (0.5 ≤ 5), deliverable hash, bound to this job | delegate | all passed ([`jobs/4/delegate-decision.json`](jobs/4/delegate-decision.json)) |
+| **release, signed through Dynamic** | Dynamic server wallet | [`0xb010b181…2bd0`](https://testnet.monadvision.com/tx/0xb010b181b91bd89a1558ebae8e47f55e3c29912f1eee25e4280b0b0857292bd0) (block 64978918) |
+
+`cast` checks after the release: the tx `from` is `0xf02A…3b11`. `JobReleased(4, 1908, releasedBy =
+0xf02A…3b11, 500000)` was emitted. `getJob(4).status` is 3 (Released). `passportOf(1908)` = 3 settled
+/ 1 refunded / 0 disputed, 6.000000 USDC. ERC-8004 `NewFeedback` index 3 (1.00,
+agentpassport/settled, `feedbackHash` = jobRef `0xc364884e…52ce`) and `FeedbackMirrored(ok = true)`.
+The agent wallet holds 6.002 USDC. The indexer records the job as `releasePath: Verifier`.
+
+## 6. Paid verification with index and Nansen rules (2026-09-23)
+
+The same x402 route now also accepts index / Nansen rules. The hirer paid for:
+
+```json
+{"agentId":"1908","policy":{"minJobsSettled":"1","maxJobsDisputed":"0","minEscrowBackedFeedbackShareBps":5000,
+ "minDistinctHirers":2,"minWeightedHirers":1,"maxLinkedHirers":0,"forbidFlagged":true}}
+```
+
+The response was `200`. `meets: true` (on chain), **`meetsAll: false`**:
+
+| rule | source | required | actual | ok |
+|---|---|---|---|---|
+| minDistinctHirers | envio-index | >= 2 | 1 | no |
+| minEscrowBackedFeedbackShareBps | envio-index | >= 5000 bps | 10000 bps (3/3) | yes |
+| minWeightedHirers | nansen | >= 1 | 0 of 1 hirers | no |
+| maxLinkedHirers | nansen | <= 0 | 0 | yes |
+| forbidFlagged | nansen | no risk flags | none | yes |
+
+That is the honest answer about agentfromzero today: the money in its record is real, but it all
+came from one hirer, and Nansen has no history for that hirer on any mainnet it covers. The Monad
+facilitator settled the 0.001 USDC in
+[`0x45343c7f…0990`](https://testnet.monadvision.com/tx/0x45343c7f083c4d606ce626bcefd0dc074dcb3b311ed2b9111e929e2263480990).
+Full response: [`traction/verify-paid-index-policy.json`](traction/verify-paid-index-policy.json).
+
 ## Reproduce
 
 ```sh
 export RPC=https://testnet-rpc.monad.xyz ESC=0x5b197edD258572DEe7C923A6D38D6Db268A266BC PP=0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A
-cast call -r $RPC $ESC "jobCount()(uint256)"                                          # 3
+cast call -r $RPC $ESC "jobCount()(uint256)"                                          # 4
 cast call -r $RPC $ESC "getJob(uint256)((uint256,address,address,address,uint128,uint64,uint64,uint64,uint8,bytes32,bytes32))" 1
 cast call -r $RPC $PP  "passportOf(uint256)((uint64,uint64,uint64,uint64,uint64,uint128,address))" 1908
 cast call -r $RPC 0x8004B663056A597Dffe9eCcC1965A193B7388713 "readFeedback(uint256,address,uint64)(int128,uint8,string,string,bool)" 1908 $PP 1

@@ -1,0 +1,186 @@
+{
+  "status": 200,
+  "payer": "0x0ec686e8c3FAE59DD0892a7c691752Cf7b98fFBa",
+  "settlement": {
+    "success": true,
+    "payer": "0x0ec686e8c3FAE59DD0892a7c691752Cf7b98fFBa",
+    "transaction": "0x45343c7f083c4d606ce626bcefd0dc074dcb3b311ed2b9111e929e2263480990",
+    "network": "eip155:10143"
+  },
+  "body": {
+    "agentId": "1908",
+    "chainId": 10143,
+    "blockNumber": "64985778",
+    "meets": true,
+    "checks": [
+      {
+        "rule": "minJobsSettled",
+        "required": ">= 1",
+        "actual": "3",
+        "ok": true
+      },
+      {
+        "rule": "minVolumeSettled",
+        "required": ">= 0",
+        "actual": "6000000",
+        "ok": true
+      },
+      {
+        "rule": "maxJobsDisputed",
+        "required": "<= 0",
+        "actual": "0",
+        "ok": true
+      }
+    ],
+    "passport": {
+      "jobsSettled": "3",
+      "jobsRefunded": "1",
+      "jobsDisputed": "0",
+      "volumeSettled": "6000000",
+      "volumeSettledUsdc": "6",
+      "firstSeen": "2026-09-21T22:55:27.000Z",
+      "lastSettled": "2026-09-23T09:25:42.000Z",
+      "token": "0x534b2f3A21130d7a60830c2Df862319e593943A3"
+    },
+    "identity": {
+      "owner": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28",
+      "agentWallet": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28",
+      "agentURI": "https://agentfromzero.netlify.app/.well-known/agent-card.json"
+    },
+    "reputation": {
+      "count": "3",
+      "summaryValue": "1",
+      "client": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A"
+    },
+    "policy": {
+      "minJobsSettled": "1",
+      "minVolumeSettled": "0",
+      "maxJobsDisputed": "0",
+      "maxAgeOfLastSettlement": "0"
+    },
+    "index": {
+      "score": 50,
+      "scoreBreakdown": {
+        "activity": 18,
+        "volume": 4,
+        "diversity": 5,
+        "repeat": 5,
+        "reliability": 18,
+        "disputePenalty": 0,
+        "concentrationPenalty": 0,
+        "cappedAt": null
+      },
+      "settledHirers": 1,
+      "repeatHirers": 1,
+      "topHirerShareBps": 10000,
+      "feedback": {
+        "count": 3,
+        "escrowBacked": 3,
+        "revoked": 0,
+        "escrowBackedShareBps": 10000
+      },
+      "avgDeliverySeconds": 167,
+      "onTimeDeliveries": 3,
+      "jobs": {
+        "opened": 4,
+        "delivered": 3,
+        "settled": 3,
+        "refunded": 1,
+        "disputed": 0
+      },
+      "nansen": {
+        "coverage": "nansen",
+        "weightedHirers": 0,
+        "linkedHirers": 0,
+        "flagged": [],
+        "owner": {
+          "visible": false,
+          "footprintUsd": 0,
+          "chains": [],
+          "firstFunder": null
+        },
+        "hirers": [
+          {
+            "address": "0x0ec686e8c3fae59dd0892a7c691752cf7b98ffba",
+            "jobsSettled": 3,
+            "volumeSettled": "6000000",
+            "weighted": false,
+            "linkedToAgent": false,
+            "visible": false,
+            "footprintUsd": 0,
+            "firstFunder": null
+          }
+        ]
+      },
+      "meta": {
+        "source": "https://agentfromzero.netlify.app/agentpassport/index.json",
+        "indexer": "Envio HyperIndex 3.12.1 (RPC source)",
+        "mode": "self-hosted (docker compose: Postgres + Hasura GraphQL + rpc-proxy + indexer)",
+        "block": {
+          "number": 64984982,
+          "time": "2026-09-23T09:56:14+00:00"
+        },
+        "generatedAt": "2026-09-23T09:56:16.297Z",
+        "nansen": {
+          "provider": "Nansen API (profiler: first-funder, current-balance, related-wallets)",
+          "addressesProfiled": 12,
+          "note": "Nansen covers mainnets (incl. Monad mainnet), not Monad testnet: a wallet that only ever lived on testnet has no Nansen history, so it cannot count as a weighted hirer."
+        }
+      }
+    },
+    "indexPolicy": {
+      "policy": {
+        "minDistinctHirers": 2,
+        "minEscrowBackedFeedbackShareBps": 5000,
+        "minWeightedHirers": 1,
+        "maxLinkedHirers": 0,
+        "forbidFlagged": true
+      },
+      "ok": false,
+      "checks": [
+        {
+          "rule": "minDistinctHirers",
+          "source": "envio-index",
+          "required": ">= 2",
+          "actual": "1",
+          "ok": false
+        },
+        {
+          "rule": "minEscrowBackedFeedbackShareBps",
+          "source": "envio-index",
+          "required": ">= 5000 bps",
+          "actual": "10000 bps (3/3)",
+          "ok": true
+        },
+        {
+          "rule": "minWeightedHirers",
+          "source": "nansen",
+          "required": ">= 1",
+          "actual": "0 of 1 hirers",
+          "ok": false
+        },
+        {
+          "rule": "maxLinkedHirers",
+          "source": "nansen",
+          "required": "<= 0",
+          "actual": "0",
+          "ok": true
+        },
+        {
+          "rule": "forbidFlagged",
+          "source": "nansen",
+          "required": "no risk flags",
+          "actual": "none",
+          "ok": true
+        }
+      ]
+    },
+    "meetsAll": false,
+    "verifiedBy": "agentfromzero (ERC-8004 agent 1908, AI; disclosed)",
+    "contracts": {
+      "agentPassport": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A",
+      "jobEscrow": "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
+      "reputationRegistry": "0x8004B663056A597Dffe9eCcC1965A193B7388713"
+    }
+  }
+}
