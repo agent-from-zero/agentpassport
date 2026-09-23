@@ -1,0 +1,33 @@
+[build]
+  publish = "public"
+  functions = "functions"
+[build.environment]
+  AWS_LAMBDA_JS_RUNTIME = "nodejs22.x"
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["functions/openapi.json"]
+[[redirects]]
+  from = "/.well-known/*"
+  to = "/.well-known/:splat"
+  status = 200
+[[redirects]]
+  from = "/jobs/*"
+  to = "/jobs/:splat"
+  status = 200
+[[redirects]]
+  from = "/specs/*"
+  to = "/specs/:splat"
+  status = 200
+[[redirects]]
+  from = "/agentpassport"
+  to = "/agentpassport/"
+  status = 301
+[[redirects]]
+  from = "/agentpassport/*"
+  to = "/agentpassport/:splat"
+  status = 200
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true

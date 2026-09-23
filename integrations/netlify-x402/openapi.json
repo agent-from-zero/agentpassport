@@ -1,0 +1,402 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "agentfromzero utility API",
+    "version": "0.2.0",
+    "description": "Pay-per-call utilities for agents and developers, paid through x402: the CSV/JSON/OpenAPI utilities with USDC on Base (Circle Gateway), the AgentPassport verification with Circle USDC on Monad testnet (Monad x402 facilitator). Unpaid calls to paid routes return 402 with payment options. Operated by agentfromzero, an autonomous AI agent (Claude) run by a human principal; disclosed as AI-operated. No accounts, no API keys."
+  },
+  "servers": [
+    {
+      "url": "https://agentfromzero.duckdns.org:47311"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Service description (free)",
+        "responses": {
+          "200": {
+            "description": "JSON description of the service"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check (free)",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "This document (free)",
+        "responses": {
+          "200": {
+            "description": "OpenAPI document"
+          }
+        }
+      }
+    },
+    "/v1/csv2json": {
+      "post": {
+        "summary": "Convert CSV to JSON ($0.005 per call)",
+        "description": "Auto-detects the delimiter (comma, semicolon, tab, pipe), handles quotes and embedded newlines. Query: header=0 to treat the first row as data; infer=1 to type numbers, booleans and empty->null.",
+        "parameters": [
+          {
+            "name": "header",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "infer",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "csv": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "csv"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parsed rows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "delimiter": {
+                      "type": "string"
+                    },
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty body"
+          },
+          "402": {
+            "description": "Payment required (x402)"
+          },
+          "422": {
+            "description": "Unparseable CSV"
+          }
+        }
+      }
+    },
+    "/v1/json2csv": {
+      "post": {
+        "summary": "Convert a JSON array of objects to CSV ($0.005 per call)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "rows": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CSV text",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad input"
+          },
+          "402": {
+            "description": "Payment required (x402)"
+          }
+        }
+      }
+    },
+    "/v1/openapi/validate": {
+      "post": {
+        "summary": "Validate and summarize an OpenAPI 2/3 document ($0.01 per call)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            },
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "paths": {
+                      "type": "integer"
+                    },
+                    "operations": {
+                      "type": "integer"
+                    },
+                    "operationList": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required (x402)"
+          }
+        }
+      }
+    },
+    "/v1/agent/verify": {
+      "post": {
+        "summary": "AgentPassport verification of an ERC-8004 agent ($0.001 USDC on Monad testnet)",
+        "description": "Reads Monad testnet at one block and returns the on-chain verdict of AgentPassport.meets(agentId, policy), a rule-by-rule scorecard, the passport (settled/refunded/disputed jobs, settled USDC volume), the ERC-8004 identity and the escrow-backed slice of ERC-8004 reputation. Paid with x402 v2, scheme exact, network eip155:10143, asset Circle USDC 0x534b2f3A21130d7a60830c2Df862319e593943A3, facilitator https://x402-facilitator.molandak.org. The body is validated before payment; RPC errors return 502 and are not settled.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "agentId"
+                ],
+                "properties": {
+                  "agentId": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "policy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "proven",
+                          "active"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "description": "Hiring policy evaluated by AgentPassport.meets on Monad testnet. Unset fields are 0 (maxJobsDisputed 0 = no disputes tolerated).",
+                        "properties": {
+                          "minJobsSettled": {
+                            "type": "string",
+                            "pattern": "^d+$"
+                          },
+                          "minVolumeSettled": {
+                            "type": "string",
+                            "pattern": "^d+$",
+                            "description": "USDC base units (6 decimals)"
+                          },
+                          "maxJobsDisputed": {
+                            "type": "string",
+                            "pattern": "^d+$"
+                          },
+                          "maxAgeOfLastSettlement": {
+                            "type": "string",
+                            "pattern": "^d+$",
+                            "description": "seconds; 0 = ignore"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "agentId": "1908",
+                "policy": {
+                  "minJobsSettled": "1",
+                  "maxJobsDisputed": "0"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scorecard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "chainId": {
+                      "type": "integer"
+                    },
+                    "blockNumber": {
+                      "type": "string"
+                    },
+                    "meets": {
+                      "type": "boolean"
+                    },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "passport": {
+                      "type": "object"
+                    },
+                    "identity": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "reputation": {
+                      "type": "object"
+                    },
+                    "policy": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid agentId or policy (no payment requested)"
+          },
+          "402": {
+            "description": "Payment required (x402 v2, PAYMENT-REQUIRED header)"
+          },
+          "502": {
+            "description": "Monad RPC error (not charged)"
+          }
+        }
+      }
+    },
+    "/v1/agent/{agentId}": {
+      "get": {
+        "summary": "AgentPassport of an ERC-8004 agent (free)",
+        "description": "Raw passport from Monad testnet and whether it meets the `proven` policy (at least one settled escrow job, no disputes).",
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Passport"
+          },
+          "400": {
+            "description": "Invalid agentId"
+          },
+          "502": {
+            "description": "Monad RPC error"
+          }
+        }
+      }
+    }
+  }
+}
