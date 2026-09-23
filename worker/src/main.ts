@@ -12,6 +12,7 @@
 //   SPEC_BASES         comma-separated URLs/dirs holding <specHash>.json (default https://agentfromzero.netlify.app/specs)
 //   PUBLISH_DIR        directory the deliverable is written to (default ./published)
 //   PUBLIC_BASE_URL    URL that serves PUBLISH_DIR (default https://agentfromzero.netlify.app)
+//   PUBLISH_PREFIX     path of the job folders (default jobs/<escrow address>: job ids restart per escrow)
 //   DEPLOY_CMD         optional shell command run after writing (e.g. a static-site deploy)
 //   MIN_AMOUNT_USDC    ignore jobs paying less (default 0.01)
 //   STATE_FILE / LOG_FILE  (default ./worker-state.json / ./worker.log, JSON lines)
@@ -70,6 +71,7 @@ const worker = new Worker({
   publisher: new DirPublisher({
     dir: env.PUBLISH_DIR ?? "published",
     baseUrl: env.PUBLIC_BASE_URL ?? "https://agentfromzero.netlify.app",
+    pathPrefix: env.PUBLISH_PREFIX ?? `jobs/${client.deployment.jobEscrow.toLowerCase()}`,
     deployCmd: env.DEPLOY_CMD || undefined,
     log: (msg, extra) => log("info", msg, extra),
   }),

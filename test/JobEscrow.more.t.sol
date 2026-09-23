@@ -250,6 +250,7 @@ contract JobEscrowSecurityTest is BaseTest {
     function testFuzz_openDeliverRelease_conservesBalances(uint128 amount, uint64 reviewWindow, uint64 ttl) public {
         amount = uint128(bound(amount, 1, 1_000_000_000));
         ttl = uint64(bound(ttl, 1, 365 days));
+        reviewWindow = uint64(bound(reviewWindow, 0, escrow.MAX_REVIEW_WINDOW()));
         IJobEscrow.OpenParams memory p = _params();
         p.amount = amount;
         p.deadline = uint64(block.timestamp) + ttl;
@@ -289,13 +290,15 @@ contract JobEscrowSecurityTest is BaseTest {
         }
     }
 
-    function testFuzz_refund_onlyAfterDeadline(uint64 ttl, uint64 elapsed) public {
+    function testFuzz_refund_acceptedJob_onlyAfterDeadline(uint64 ttl, uint64 elapsed) public {
         ttl = uint64(bound(ttl, 1, 365 days));
         elapsed = uint64(bound(elapsed, 0, 2 * 365 days));
         IJobEscrow.OpenParams memory p = _params();
         p.deadline = uint64(block.timestamp) + ttl;
         vm.prank(hirer);
         uint256 jobId = escrow.open(p);
+        vm.prank(agentWallet);
+        escrow.accept(jobId);
         vm.warp(block.timestamp + elapsed);
         vm.prank(hirer);
         if (elapsed > ttl) {

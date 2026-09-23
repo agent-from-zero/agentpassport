@@ -3,7 +3,9 @@
 # AgentPassport HyperIndex indexer (Envio HyperIndex v3) for Monad testnet (chain 10143).
 #
 # Indexes the whole AgentPassport trust loop:
-#   JobEscrow   -> jobs, hirers, delivery latency, release path (hirer / verifier / passkey / review window)
+#   JobEscrow   -> jobs, hirers, acceptance, delivery latency, release path (hirer / verifier / passkey /
+#                  review window). Two deployments (v1, then v2 after a security review) attest into the
+#                  same AgentPassport; job ids restart at 1 on each, so Job ids are "<escrow>-<jobId>".
 #   AgentPassport -> stamps (Settled / Refunded / Disputed) and whether the ERC-8004 mirror succeeded
 #   ERC-8004 IdentityRegistry   -> agents (owner, agentWallet, agent card URI)
 #   ERC-8004 ReputationRegistry -> every feedback entry, split into escrow-backed vs unbacked
@@ -24,6 +26,8 @@ contracts:
   - name: JobEscrow
     events:
       - event: JobOpened(uint256 indexed jobId, uint256 indexed agentId, address indexed hirer, address token, uint256 amount, uint64 deadline, bytes32 specHash, string endpoint)
+      # v2 only (emitted by accept() and by the first deliver()); v1 never emits it.
+      - event: JobAccepted(uint256 indexed jobId, uint256 indexed agentId, address indexed by)
       - event: JobDelivered(uint256 indexed jobId, uint256 indexed agentId, bytes32 deliverableHash, string deliverableURI)
       - event: JobReleased(uint256 indexed jobId, uint256 indexed agentId, address indexed releasedBy, uint256 amount)
       - event: JobRefunded(uint256 indexed jobId, uint256 indexed agentId, uint256 amount)
@@ -46,7 +50,7 @@ contracts:
       - event: FeedbackRevoked(uint256 indexed agentId, address indexed clientAddress, uint64 indexed feedbackIndex)
 chains:
   - id: 10143 # Monad testnet
-    # AgentPassport + JobEscrow deployment block; ERC-8004 registry activity is indexed from the same
+    # AgentPassport + JobEscrow v1 deployment block; ERC-8004 registry activity is indexed from the same
     # block. Agents registered earlier get their identity from one cached RPC read (src/lib/effects.ts).
     start_block: 64403471
     rpc:
@@ -61,7 +65,9 @@ chains:
         polling_interval: 2000
     contracts:
       - name: JobEscrow
-        address: "0x5b197edD258572DEe7C923A6D38D6Db268A266BC"
+        address:
+          - "0x5b197edD258572DEe7C923A6D38D6Db268A266BC" # v1, deployed block 64403471 (jobs #1-#5, all closed)
+          - "0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355" # v2, deployed block 65011497 (agent acceptance)
       - name: AgentPassport
         address: "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A"
       - name: IdentityRegistry

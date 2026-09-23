@@ -97,8 +97,11 @@ describe("AgentPassport SDK on anvil", () => {
   it("refund after deadline and dispute inside the review window update the passport", async () => {
     const test = createTestClient({ chain, mode: "anvil", transport: http(rpc) });
     const now = (await pub.getBlock()).timestamp;
-    // job 3: short deadline, never delivered -> refund
+    // job 3: short deadline, accepted by the agent, never delivered -> refund counts against it
     await sdk.hirer.hire({ agentId, amount: parseUsdc("1"), specHash: hashContent("r"), deadline: now + 60n });
+    expect(await sdk.hirer.acceptedAt(3n)).toBe(0n);
+    await sdk.agent.accept(3n);
+    expect(await sdk.hirer.acceptedAt(3n)).toBeGreaterThan(0n);
     await expect(sdk.hirer.refund(3n)).rejects.toThrow(/DeadlineNotPassed/);
     await test.increaseTime({ seconds: 120 });
     await test.mine({ blocks: 1 });
@@ -121,10 +124,19 @@ describe("AgentPassport SDK on anvil", () => {
     expect(card.passport).toMatchObject({ jobsSettled: "1", jobsRefunded: "1", jobsDisputed: "1", volumeSettledUsdc: "5" });
   });
 
+  it("a job the agent never accepted can be cancelled at once and leaves the passport alone", async () => {
+    const before = await sdk.hirer.getPassport(agentId);
+    const { jobId } = await sdk.stranger.hire({ agentId, amount: 1n, specHash: hashContent("unsolicited"), endpoint: "grief" });
+    await sdk.stranger.refund(jobId);
+    expect((await sdk.hirer.getJob(jobId)).status).toBe(JobStatus.Refunded);
+    expect(await sdk.hirer.getPassport(agentId)).toEqual(before);
+  });
+
   it("listJobs filters by agent and status (state-based, no logs)", async () => {
     const all = await sdk.hirer.listJobs({ agentId });
-    expect(all.map((j) => j.jobId)).toEqual([1n, 2n, 3n]);
+    expect(all.map((j) => j.jobId)).toEqual([1n, 2n, 3n, 4n]);
     expect((await sdk.hirer.listJobs({ status: JobStatus.Released })).map((j) => j.jobId)).toEqual([1n]);
+    expect((await sdk.hirer.listJobs({ status: JobStatus.Refunded })).map((j) => j.jobId)).toEqual([3n, 4n]);
     expect(await sdk.hirer.listJobs({ agentId: 99n })).toEqual([]);
   });
 
@@ -133,13 +145,18 @@ describe("AgentPassport SDK on anvil", () => {
     const names = events.map((e) => `${e.eventName}:${"jobId" in e.args ? e.args.jobId : ""}`);
     expect(names).toEqual([
       "JobOpened:1",
+      "JobAccepted:1", // deliver implies acceptance
       "JobDelivered:1",
       "JobReleased:1",
       "JobOpened:2",
       "JobOpened:3",
+      "JobAccepted:3",
       "JobRefunded:3",
+      "JobAccepted:2",
       "JobDelivered:2",
       "JobDisputed:2",
+      "JobOpened:4",
+      "JobRefunded:4", // never accepted: cancelled, no passport entry
     ]);
   });
 
@@ -155,7 +172,7 @@ describe("AgentPassport SDK on anvil", () => {
     }
     expect(seen.map((e) => e.eventName)).toEqual(["JobOpened"]);
     const e = seen[0]!;
-    expect(e.eventName === "JobOpened" && e.args.jobId).toBe(4n);
+    expect(e.eventName === "JobOpened" && e.args.jobId).toBe(5n);
   });
 
   it("identity lookups: owner, agentWallet, payout address", async () => {

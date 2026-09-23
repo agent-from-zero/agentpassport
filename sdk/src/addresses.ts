@@ -30,15 +30,31 @@ export interface Deployment {
   fromBlock: bigint;
 }
 
-/** The live AgentPassport deployment on Monad testnet (Sourcify exact-match verified). */
+/**
+ * The live AgentPassport deployment on Monad testnet (Sourcify exact-match verified), with
+ * JobEscrow v2: agents accept jobs, no delivery after the deadline, and a refund marks a passport
+ * only for a job the agent accepted (docs/SECURITY.md). The passport is the same contract as in v1,
+ * so an agent's record includes its v1 jobs.
+ */
 export const MONAD_TESTNET: Deployment = {
   chainId: 10143,
   agentPassport: "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A",
-  jobEscrow: "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
+  jobEscrow: "0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355",
   identityRegistry: "0x8004A818BFB912233c491871b3d84c89A494BD9e",
   reputationRegistry: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
   usdc: "0x534b2f3A21130d7a60830c2Df862319e593943A3",
   usdcDomain: { name: "USDC", version: "2" },
+  fromBlock: 65011497n,
+};
+
+/**
+ * The same deployment seen through JobEscrow v1 (jobs #1-#5, 2026-09-21..23). v1 remains an
+ * attester of the passport so that nobody's funds can be stuck in it, but new jobs belong on v2.
+ * Use it to read the old jobs: `new AgentPassportClient({ publicClient, deployment: MONAD_TESTNET_V1 })`.
+ */
+export const MONAD_TESTNET_V1: Deployment = {
+  ...MONAD_TESTNET,
+  jobEscrow: "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
   fromBlock: 64403471n,
 };
 

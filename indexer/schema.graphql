@@ -4,12 +4,21 @@
 # AgentHirer, AgentDay, ProtocolDay, Protocol) are maintained incrementally by the handlers so a
 # consumer gets a full trust picture of an agent in one GraphQL query, with no client-side scans.
 # Amounts are in the settlement token's smallest unit (Circle USDC, 6 decimals).
+#
+# Two JobEscrow deployments (v1, then v2) attest into the same AgentPassport and both number their
+# jobs from 1, so Job ids are `${escrow}-${jobId}` (lowercase escrow address). Stamps, JobRefs and
+# feedback are keyed by jobRef = keccak256(abi.encode(escrow, jobId)), which is already unique.
 
 enum JobStatus {
   Open
   Delivered
   Released
+  # Refunded after the agent committed (v1: every refund; v2: accepted, then not delivered by the
+  # deadline). Attested on the passport as a refund against the agent.
   Refunded
+  # v2 only: the hirer took back a job the agent never accepted. Not attested; never counts
+  # against the agent.
+  Cancelled
   Disputed
 }
 
@@ -31,9 +40,13 @@ enum ReleasePath {
 type Protocol {
   id: ID!
   jobsOpened: Int!
+  "Jobs an agent accepted (v2 JobAccepted)."
+  jobsAccepted: Int!
   jobsDelivered: Int!
   jobsReleased: Int!
   jobsRefunded: Int!
+  "Unaccepted v2 jobs the hirer took back (not attested)."
+  jobsCancelled: Int!
   jobsDisputed: Int!
   gaslessOpens: Int!
   passkeyReleases: Int!
@@ -62,9 +75,14 @@ type Agent {
 
   # --- escrow activity ---
   jobsOpened: Int!
+  "Jobs this agent accepted (v2 JobAccepted; v1 had no acceptance step)."
+  jobsAccepted: Int!
   jobsDelivered: Int!
   jobsSettled: Int!
+  "Attested refunds only (equals passportOf().jobsRefunded); cancelled jobs are not included."
   jobsRefunded: Int!
+  "Unaccepted v2 jobs the hirer took back. Not attested, not in the score, not a refund."
+  jobsCancelled: Int!
   jobsDisputed: Int!
   volumeEscrowed: BigInt!
   volumeSettled: BigInt!
@@ -112,6 +130,8 @@ type Hirer {
   jobsOpened: Int!
   jobsSettled: Int!
   jobsRefunded: Int!
+  "Unaccepted v2 jobs this hirer took back."
+  jobsCancelled: Int!
   jobsDisputed: Int!
   volumeEscrowed: BigInt!
   volumeSettled: BigInt!
@@ -139,10 +159,13 @@ type AgentHirer @index(fields: ["agent", ["volumeSettled", "DESC"]]) {
   lastAt: Timestamp!
 }
 
-"One escrow job (id = jobId)."
+"One escrow job (id = escrow-jobId, e.g. 0x41cb...4355-1; job ids restart on each escrow)."
 type Job {
   id: ID!
+  "Job id on its own escrow (not unique across escrows)."
   jobId: BigInt!
+  "JobEscrow contract that holds the job (lowercase address)."
+  escrow: String! @index
   agent: Agent!
   hirer: Hirer!
   token: String!
@@ -159,6 +182,9 @@ type Job {
   openedAt: Timestamp!
   openedBlock: Int! @index
   openTx: String!
+  "When the agent accepted (v2 JobAccepted); null on v1, which had no acceptance step."
+  acceptedAt: Timestamp
+  acceptedBy: String
   deliveredAt: Timestamp
   deliveredBy: String
   deliverableHash: String

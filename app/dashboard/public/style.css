@@ -85,8 +85,13 @@ tr.fresh { animation: fresh 3s ease-out; }
 .s-Delivered { background: rgba(143,123,255,.18); color: var(--accent); }
 .s-Released { background: rgba(60,207,142,.14); color: var(--ok); }
 .s-Refunded, .s-Disputed { background: rgba(255,107,107,.13); color: var(--bad); }
+.s-Cancelled { background: rgba(154,154,171,.14); color: var(--muted); }
+.jobref { font-family: var(--mono); font-size: .84rem; font-weight: 600; color: var(--fg); }
+.jobref.v2 { color: var(--accent); }
+tr.sep td { white-space: normal; background: var(--panel2); color: var(--muted); font-size: .8rem; padding: 7px 12px; }
 .txs a { margin-right: 8px; font-family: var(--mono); font-size: .8rem; }
 .contracts td:first-child { color: var(--muted); }
+.contracts td:last-child { white-space: normal; } .contracts .mono { word-break: break-all; }
 
 /* hire */
 .hire { display: grid; grid-template-columns: 250px 1fr; gap: 16px; }
@@ -126,4 +131,5 @@ footer { max-width: 1120px; margin: 30px auto 0; padding: 20px 20px 40px; color:
   main { padding: 4px 14px 30px; }
   .row .btn { width: 100%; } .field { min-width: 0; flex: 1 1 100%; }
   .kv td:first-child { white-space: normal; width: 34%; word-break: normal; }
+  .contracts td:first-child { white-space: normal; width: 34%; }
 }

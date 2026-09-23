@@ -1,0 +1,7 @@
+{"t":"2026-09-23T12:18:44.816Z","level":"info","msg":"worker up","agentId":"1908","key":"0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28","escrow":"0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355","skills":["scorecard"]}
+{"t":"2026-09-23T12:18:45.180Z","level":"info","msg":"working","jobId":"1","skill":"scorecard","spec":"https://agentfromzero.netlify.app/specs/0x7c4a568cc63f709b0c08ccfe4541997c6797eb5eaed5bab1207c19a32a5499cc.json"}
+{"t":"2026-09-23T12:18:47.398Z","level":"info","msg":"accepted","jobId":"1","tx":"0x713c6a07875e0f4b78a5b3b4e0ebf377b380b3862ffa3bbdff0b8e5612682348","block":"65012977"}
+{"t":"2026-09-23T12:18:47.421Z","level":"info","msg":"deploy","cmd":"node …"}
+{"t":"2026-09-23T12:20:33.219Z","level":"info","msg":"published","jobId":"1","uri":"https://agentfromzero.netlify.app/jobs/0x41cb9b1a7ebe2e1a420d8cd96d02a9009ac54355/1/deliverable.json","deliverableHash":"0x98a0476ce0c7444a5474f752a4d7aa30d77f11c74422c4a445e9627471b7d03a","bytes":8696}
+{"t":"2026-09-23T12:20:34.504Z","level":"info","msg":"delivered","jobId":"1","tx":"0xef8e15e095806070440ca79af71e34e13abfb65a280e5ba033fb3794e8daba31","block":"65013327","gasUsed":"104070"}
+{"t":"2026-09-23T12:20:34.514Z","level":"info","msg":"done","jobId":"1","result":"delivered"}

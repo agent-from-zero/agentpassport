@@ -19,6 +19,9 @@ const OUT = process.env.OUT ?? "./snapshot/index.json";
 const MAX_LAG_BLOCKS = Number(process.env.MAX_LAG_BLOCKS ?? 2000);
 const log = (msg: string) => console.error(`[snapshot] ${msg}`);
 
+// recentJobs: newest 20 across both escrows. `jobId` restarts at 1 on each JobEscrow, so a job is
+// identified by (`escrow`, `jobId`), or by `id` = `${escrow}-${jobId}`. status "Cancelled" = a v2
+// job the agent never accepted, taken back by the hirer (not attested, not a refund).
 const QUERY = /* GraphQL */ `
   {
     Agent(order_by: { agentId: asc }) {
@@ -28,13 +31,13 @@ const QUERY = /* GraphQL */ `
       hirers(order_by: { volumeSettled: desc }) { hirer_id jobsSettled volumeSettled }
     }
     Protocol {
-      jobsOpened jobsDelivered jobsReleased jobsRefunded jobsDisputed gaslessOpens passkeyReleases
+      jobsOpened jobsAccepted jobsDelivered jobsReleased jobsRefunded jobsCancelled jobsDisputed gaslessOpens passkeyReleases
       volumeEscrowed volumeSettled agentsSeen agentsWithStamps hirers feedbackTotal feedbackEscrowBacked
       mirrorFailures lastEventBlock lastEventAt
     }
-    Job(order_by: { jobId: desc }, limit: 20) {
-      jobId agent_id hirer_id amount status releasePath releasedBy gasless endpoint openedAt deliveredAt closedAt
-      openTx deliverTx closeTx deliverableURI
+    Job(order_by: [{ openedBlock: desc }, { jobId: desc }], limit: 20) {
+      id escrow jobId agent_id hirer_id amount status releasePath releasedBy gasless endpoint openedAt acceptedAt
+      deliveredAt closedAt openTx deliverTx closeTx deliverableURI
     }
     _meta { chainId progressBlock progressBlockTime sourceBlock isReady eventsProcessed }
   }

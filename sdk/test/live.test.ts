@@ -6,6 +6,7 @@ import {
   AGENTFROMZERO_AGENT_ID,
   AgentPassportClient,
   MONAD_TESTNET,
+  MONAD_TESTNET_V1,
   POLICIES,
   hashContent,
   jobEscrowAbi,
@@ -19,6 +20,7 @@ import {
 const live = process.env.LIVE !== "0";
 const publicClient = createPublicClient({ chain: monadTestnet, transport: http(process.env.MONAD_TESTNET_RPC) });
 const ap = new AgentPassportClient({ publicClient });
+const apV1 = new AgentPassportClient({ publicClient, deployment: MONAD_TESTNET_V1 });
 
 describe.runIf(live)("live Monad testnet (read-only)", () => {
   it("agentfromzero (agentId 1908) has an escrow-backed passport and meets `proven`", async () => {
@@ -65,14 +67,23 @@ describe.runIf(live)("live Monad testnet (read-only)", () => {
     expect(ap.openNonce(params, 5n, 1_900_000_000n)).toBe(onChain);
   });
 
-  it("finds job #1's delivery without an archive log scan, and the served bytes match the on-chain hash", async () => {
-    const d = await ap.getDelivery(1n);
+  it("JobEscrow v2 is live, attests into the same passport, and v1 is still an attester", async () => {
+    const version = await publicClient.readContract({ address: MONAD_TESTNET.jobEscrow, abi: jobEscrowAbi, functionName: "version" });
+    expect(version).toBe("2");
+    for (const escrow of [MONAD_TESTNET.jobEscrow, MONAD_TESTNET_V1.jobEscrow]) {
+      expect(await publicClient.readContract({ address: escrow, abi: jobEscrowAbi, functionName: "passport" })).toBe(MONAD_TESTNET.agentPassport);
+    }
+    expect(await apV1.acceptedAt(1n)).toBeNull(); // v1 has no acceptance
+  });
+
+  it("finds v1 job #1's delivery without an archive log scan, and the served bytes match the on-chain hash", async () => {
+    const d = await apV1.getDelivery(1n);
     expect(d).toMatchObject({
       deliverableURI: "https://agentfromzero.netlify.app/jobs/1/deliverable.json",
       deliverableHash: "0xbbd6a22caa4676e008b34a7b000e483b98149d9323153720d04954e49627add9",
       transactionHash: "0x1072a2edbaf47ccbd22ae48a2e286209b814489f6a564a338e9f6e367473706d",
     });
-    expect((await ap.verifyDelivery(1n)).ok).toBe(true);
+    expect((await apV1.verifyDelivery(1n)).ok).toBe(true);
   });
 
   it("agent card resolves from the ERC-8004 tokenURI", async () => {

@@ -277,6 +277,19 @@ export class AgentPassportClient {
     return { ...j, amount: BigInt(j.amount), deadline: BigInt(j.deadline), reviewWindow: BigInt(j.reviewWindow), deliveredAt: BigInt(j.deliveredAt), status: j.status as JobStatus };
   }
 
+  /**
+   * When the agent accepted `jobId` (unix seconds), 0n if it has not, or null on an escrow that
+   * predates acceptance (v1). A refund of an unaccepted job leaves no mark on the passport.
+   */
+  async acceptedAt(jobId: bigint | number): Promise<bigint | null> {
+    try {
+      const t = await this.publicClient.readContract({ address: this.deployment.jobEscrow, abi: jobEscrowAbi, functionName: "acceptedAt", args: [BigInt(jobId)] });
+      return BigInt(t);
+    } catch {
+      return null;
+    }
+  }
+
   async jobCount(): Promise<bigint> {
     return this.publicClient.readContract({ address: this.deployment.jobEscrow, abi: jobEscrowAbi, functionName: "jobCount" });
   }
@@ -441,7 +454,15 @@ export class AgentPassportClient {
   }
 
   /**
-   * Agent side: commit to a deliverable. Pass the exact bytes (hashed here) or a precomputed hash,
+   * Agent side: take the job before working on it. After this the hirer can no longer cancel it,
+   * and a refund after the deadline counts against the agent. Optional: `deliver` implies it.
+   */
+  accept(jobId: bigint | number): Promise<TxResult> {
+    return this.write(this.deployment.jobEscrow, jobEscrowAbi, "accept", [BigInt(jobId)]);
+  }
+
+  /**
+   * Agent side: commit to a deliverable (before the job's deadline). Pass the exact bytes (hashed here) or a precomputed hash,
    * plus the URI where the hirer can fetch those bytes.
    */
   async deliver(jobId: bigint | number, deliverable: { uri: string; content?: string | Uint8Array; hash?: Hex }): Promise<TxResult & { deliverableHash: Hex }> {
@@ -456,7 +477,10 @@ export class AgentPassportClient {
     return this.write(this.deployment.jobEscrow, jobEscrowAbi, "release", [BigInt(jobId)]);
   }
 
-  /** Hirer: reclaim an undelivered job after its deadline. */
+  /**
+   * Hirer: reclaim an undelivered job. Before the agent accepts it this is a cancel (any time, no
+   * passport entry); after acceptance, only once the deadline has passed (recorded as a refund).
+   */
   refund(jobId: bigint | number): Promise<TxResult> {
     return this.write(this.deployment.jobEscrow, jobEscrowAbi, "refund", [BigInt(jobId)]);
   }

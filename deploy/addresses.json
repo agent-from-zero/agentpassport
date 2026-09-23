@@ -1,10 +1,13 @@
 {
   "monad-testnet": {
     "AgentPassport": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A",
-    "JobEscrow": "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
+    "JobEscrow": "0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355",
+    "JobEscrowV1": "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
     "chainId": 10143,
     "deployedAt": 1789979930,
     "deployedAtBlock": 64403471,
-    "deployer": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28"
+    "deployer": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28",
+    "jobEscrowDeployedAt": 1790165478,
+    "jobEscrowDeployedAtBlock": 65011497
   }
 }

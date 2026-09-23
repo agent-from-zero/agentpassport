@@ -65,6 +65,8 @@ export interface Publisher {
 export interface DirPublisherOptions {
   dir: string;
   baseUrl: string;
+  /** Path under `dir` / `baseUrl` for job folders (default "jobs"). Scope it per escrow: job ids restart at 1 in every escrow. */
+  pathPrefix?: string;
   deployCmd?: string;
   fetch?: typeof fetch;
   verifyTimeoutMs?: number;
@@ -72,8 +74,9 @@ export interface DirPublisherOptions {
 }
 
 /**
- * Writes `<dir>/jobs/<jobId>/deliverable.json`, optionally runs a deploy command (e.g. a static-site
- * deploy), then polls `<baseUrl>/jobs/<jobId>/deliverable.json` until it serves identical bytes.
+ * Writes `<dir>/<pathPrefix>/<jobId>/deliverable.json`, optionally runs a deploy command (e.g. a
+ * static-site deploy), then polls `<baseUrl>/<pathPrefix>/<jobId>/deliverable.json` until it serves
+ * identical bytes.
  */
 export class DirPublisher implements Publisher {
   private readonly opts: DirPublisherOptions;
@@ -83,8 +86,9 @@ export class DirPublisher implements Publisher {
   }
 
   async publish(jobId: bigint, bytes: Uint8Array): Promise<string> {
-    const rel = `jobs/${jobId}/deliverable.json`;
-    mkdirSync(join(this.opts.dir, "jobs", String(jobId)), { recursive: true });
+    const prefix = (this.opts.pathPrefix ?? "jobs").replace(/^\/+|\/+$/g, "");
+    const rel = `${prefix}/${jobId}/deliverable.json`;
+    mkdirSync(join(this.opts.dir, prefix, String(jobId)), { recursive: true });
     writeFileSync(join(this.opts.dir, rel), bytes);
     if (this.opts.deployCmd) {
       this.opts.log?.("deploy", { cmd: this.opts.deployCmd.replace(/\s.*/, " …") });

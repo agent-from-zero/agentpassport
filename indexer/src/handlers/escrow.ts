@@ -1,15 +1,20 @@
 /**
- * JobEscrow handlers: the job lifecycle (open -> deliver -> release | refund | dispute).
+ * JobEscrow handlers: the job lifecycle (open -> [accept] -> deliver -> release | refund | dispute).
  *
  * Outcome counters (settled / refunded / disputed, volumes, hirer structure, score) are driven by
  * the AgentPassport `Attested` event in passport.ts, so the indexed passport always equals the
  * on-chain `passportOf`. This file records *how* each job happened: who opened it and whether
- * gaslessly, delivery latency and punctuality, and which path released the money.
+ * gaslessly, when the agent accepted, delivery latency and punctuality, and which path released
+ * the money.
+ *
+ * Two escrows feed these handlers (v1 and v2, see config.yaml) and both number jobs from 1, so a
+ * job is always looked up by `jobKey(event.srcAddress, jobId)`. On v2 a refund of a job the agent
+ * never accepted is a cancel: no `Attested`, Job.status "Cancelled", counted in jobsCancelled only.
  */
 import { indexer } from "envio";
 import { readIdentity, readJobVerifier } from "../lib/effects.js";
 import { derive, loadAgent, loadDays, loadHirer, loadPair, loadProtocol } from "../lib/store.js";
-import { SELECTOR, jobRefOf, selectorOf, toDate } from "../lib/util.js";
+import { SELECTOR, hasAcceptance, jobKey, jobRefOf, selectorOf, toDate } from "../lib/util.js";
 
 indexer.onEvent(
   { contract: "JobEscrow", event: "JobOpened", fields: { transaction: ["hash", "from", "input"], block: ["timestamp"] } },
@@ -34,11 +39,14 @@ indexer.onEvent(
     // Direct openWithAuthorization, or a relayed/wrapped call that the hirer did not send itself.
     const gasless = sel === SELECTOR.openWithAuthorization || (sel !== SELECTOR.open && from !== hirer);
 
-    const jobRef = jobRefOf(jobId, event.srcAddress);
-    context.JobRef.set({ id: jobRef, job_id: jobId.toString() });
+    const escrow = event.srcAddress.toLowerCase();
+    const id = jobKey(escrow, jobId);
+    const jobRef = jobRefOf(jobId, escrow);
+    context.JobRef.set({ id: jobRef, job_id: id });
     context.Job.set({
-      id: jobId.toString(),
+      id,
       jobId,
+      escrow,
       agent_id: agent.id,
       hirer_id: hirer,
       token,
@@ -53,6 +61,8 @@ indexer.onEvent(
       openedAt: toDate(ts),
       openedBlock: event.block.number,
       openTx: event.transaction.hash,
+      acceptedAt: undefined,
+      acceptedBy: undefined,
       deliveredAt: undefined,
       deliveredBy: undefined,
       deliverableHash: undefined,
@@ -99,17 +109,39 @@ indexer.onEvent(
 );
 
 indexer.onEvent(
+  { contract: "JobEscrow", event: "JobAccepted", fields: { block: ["timestamp"] } },
+  async ({ event, context }) => {
+    const ts = event.block.timestamp;
+    const { jobId, agentId, by } = event.params;
+    const [job, agent, protocol] = await Promise.all([
+      context.Job.get(jobKey(event.srcAddress, jobId)),
+      context.Agent.get(agentId.toString()),
+      loadProtocol(context, event.block.number, ts),
+    ]);
+    if (!job || !agent) {
+      context.log.warn(`JobAccepted for unknown job ${event.srcAddress}-${jobId}`);
+      return;
+    }
+    if (job.acceptedAt) return; // the escrow accepts a job once
+    context.Job.set({ ...job, acceptedAt: toDate(ts), acceptedBy: by });
+    context.Agent.set({ ...agent, jobsAccepted: agent.jobsAccepted + 1, lastActivityAt: toDate(ts) });
+    protocol.jobsAccepted += 1;
+    context.Protocol.set(protocol);
+  },
+);
+
+indexer.onEvent(
   { contract: "JobEscrow", event: "JobDelivered", fields: { transaction: ["hash", "from"], block: ["timestamp"] } },
   async ({ event, context }) => {
     const ts = event.block.timestamp;
     const { jobId, agentId, deliverableHash, deliverableURI } = event.params;
     const [job, agent, protocol] = await Promise.all([
-      context.Job.get(jobId.toString()),
+      context.Job.get(jobKey(event.srcAddress, jobId)),
       context.Agent.get(agentId.toString()),
       loadProtocol(context, event.block.number, ts),
     ]);
     if (!job || !agent) {
-      context.log.warn(`JobDelivered for unknown job ${jobId}`);
+      context.log.warn(`JobDelivered for unknown job ${event.srcAddress}-${jobId}`);
       return;
     }
     const deliverySeconds = Math.max(0, ts - Math.floor(job.openedAt.getTime() / 1000));
@@ -145,11 +177,11 @@ indexer.onEvent(
     const ts = event.block.timestamp;
     const { jobId, releasedBy } = event.params;
     const [job, protocol] = await Promise.all([
-      context.Job.get(jobId.toString()),
+      context.Job.get(jobKey(event.srcAddress, jobId)),
       loadProtocol(context, event.block.number, ts),
     ]);
     if (!job) {
-      context.log.warn(`JobReleased for unknown job ${jobId}`);
+      context.log.warn(`JobReleased for unknown job ${event.srcAddress}-${jobId}`);
       return;
     }
     let releasePath: "Hirer" | "Verifier" | "Passkey" | "ReviewWindow";
@@ -157,7 +189,7 @@ indexer.onEvent(
       // releaseWithPasskey reports the hirer as releaser whoever submits the transaction.
       releasePath = selectorOf(event.transaction.input) === SELECTOR.releaseWithPasskey ? "Passkey" : "Hirer";
     } else {
-      const verifier = await context.effect(readJobVerifier, jobId.toString());
+      const verifier = await context.effect(readJobVerifier, job.id);
       releasePath = verifier === releasedBy ? "Verifier" : "ReviewWindow";
     }
     context.Job.set({ ...job, status: "Released", closedAt: toDate(ts), closeTx: event.transaction.hash, releasedBy, releasePath, stamp_id: job.jobRef });
@@ -174,16 +206,33 @@ indexer.onEvent(
 indexer.onEvent(
   { contract: "JobEscrow", event: "JobRefunded", fields: { transaction: ["hash"], block: ["timestamp"] } },
   async ({ event, context }) => {
-    const job = await context.Job.get(event.params.jobId.toString());
+    const ts = event.block.timestamp;
+    const job = await context.Job.get(jobKey(event.srcAddress, event.params.jobId));
     if (!job) return;
-    context.Job.set({ ...job, status: "Refunded", closedAt: toDate(event.block.timestamp), closeTx: event.transaction.hash, stamp_id: job.jobRef });
+    // v2 attests a refund only if the agent accepted (JobAccepted always precedes JobRefunded, so
+    // acceptedAt is final here). Unaccepted = the hirer cancelled: no stamp, nothing against the agent.
+    const cancelled = hasAcceptance(job.escrow) && !job.acceptedAt;
+    if (!cancelled) {
+      context.Job.set({ ...job, status: "Refunded", closedAt: toDate(ts), closeTx: event.transaction.hash, stamp_id: job.jobRef });
+      return;
+    }
+    context.Job.set({ ...job, status: "Cancelled", closedAt: toDate(ts), closeTx: event.transaction.hash });
+    const [agent, hirer, protocol] = await Promise.all([
+      context.Agent.get(job.agent_id),
+      context.Hirer.get(job.hirer_id),
+      loadProtocol(context, event.block.number, ts),
+    ]);
+    if (agent) context.Agent.set({ ...agent, jobsCancelled: agent.jobsCancelled + 1 });
+    if (hirer) context.Hirer.set({ ...hirer, jobsCancelled: hirer.jobsCancelled + 1, lastSeenAt: toDate(ts) });
+    protocol.jobsCancelled += 1;
+    context.Protocol.set(protocol);
   },
 );
 
 indexer.onEvent(
   { contract: "JobEscrow", event: "JobDisputed", fields: { transaction: ["hash"], block: ["timestamp"] } },
   async ({ event, context }) => {
-    const job = await context.Job.get(event.params.jobId.toString());
+    const job = await context.Job.get(jobKey(event.srcAddress, event.params.jobId));
     if (!job) return;
     context.Job.set({ ...job, status: "Disputed", closedAt: toDate(event.block.timestamp), closeTx: event.transaction.hash, stamp_id: job.jobRef });
   },

@@ -14,7 +14,8 @@ Defaults to the live **Monad testnet** deployment (chain 10143):
 | | |
 |---|---|
 | AgentPassport | `0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A` |
-| JobEscrow | `0x5b197edD258572DEe7C923A6D38D6Db268A266BC` |
+| JobEscrow (v2) | `0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355` |
+| JobEscrow v1 (jobs #1-#5; `MONAD_TESTNET_V1`) | `0x5b197edD258572DEe7C923A6D38D6Db268A266BC` |
 | ERC-8004 Identity / Reputation | `0x8004A818BFB912233c491871b3d84c89A494BD9e` / `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
 | Circle USDC (EIP-3009) | `0x534b2f3A21130d7a60830c2Df862319e593943A3` |
 
@@ -106,11 +107,15 @@ signature useless. Replays fail because the EIP-3009 nonce can only be used once
 ```ts
 const agent = new AgentPassportClient({ publicClient, walletClient: agentWallet });
 const bytes = JSON.stringify(result);
-// publish `bytes` somewhere public first, then commit to them:
+await agent.accept(jobId);   // take the job: the hirer can no longer cancel it (optional; deliver implies it)
+// publish `bytes` somewhere public first, then commit to them (before the job's deadline):
 await agent.deliver(jobId, { uri: "https://example.com/jobs/3/deliverable.json", content: bytes });
 ```
 
-The key must be the agent's ERC-8004 owner, an approved operator, or its `agentWallet`. For a
+The key must be the agent's ERC-8004 owner, an approved operator, or its `agentWallet`. A job the
+agent has not accepted can be cancelled by the hirer at any time and leaves no mark on the passport;
+once accepted, a refund after the deadline counts against the agent (JobEscrow v2, see
+[`../docs/SECURITY.md`](../docs/SECURITY.md)). For a
 complete agent loop (watch → fetch spec → work → publish → deliver), see [`../worker`](../worker).
 
 ## ERC-8004 lookups
@@ -170,8 +175,8 @@ Nansen rules fail closed: an agent without Nansen data does not pass them.
 | Area | Methods |
 |---|---|
 | Passport | `getPassport`, `meets`, `scorecard`, `settledBetween` |
-| Escrow reads | `getJob`, `jobCount`, `listJobs`, `getDelivery`, `verifyDelivery` |
-| Escrow writes | `hire`, `signHire` + `openWithAuthorization`, `deliver`, `release`, `refund`, `dispute` |
+| Escrow reads | `getJob`, `acceptedAt`, `jobCount`, `listJobs`, `getDelivery`, `verifyDelivery` |
+| Escrow writes | `hire`, `signHire` + `openWithAuthorization`, `accept`, `deliver`, `release`, `refund`, `dispute` |
 | ERC-8004 | `getAgent`, `getPayoutAddress`, `fetchAgentCard`, `getEscrowReputation`, `getEscrowFeedback` |
 | Events | `getJobEvents`, `watchJobEvents` |
 | Trust index | `fetchIndexSnapshot`, `queryIndexedAgent`, `evaluateIndexPolicy`, `toIndexPolicy`, `fromRawAgent` |

@@ -1,4 +1,4 @@
-# Demo log: every AgentPassport job on Monad testnet (jobs #1 and #2 on 2026-09-21, jobs #3, #4 and #5 on 2026-09-23)
+# Demo log: every AgentPassport job on Monad testnet (JobEscrow v1: jobs #1 and #2 on 2026-09-21, jobs #3, #4 and #5 on 2026-09-23; JobEscrow v2: jobs #1 and #2 on 2026-09-23)
 
 Everything below happened on **Monad testnet (chain id 10143)** with real transactions from two
 keys: the **hirer** (a fresh EOA funded by the Monad and Circle faucets) and the **agent**
@@ -242,11 +242,42 @@ Every step below was a click in the dashboard, apart from the worker, which ran 
   6.25 USDC; job #5 status 3 (Released). The saved deliverable
   [`jobs/5/deliverable.json`](jobs/5/deliverable.json) hashes to `0x08b99975…f5fd`.
 
+## 8. JobEscrow v2 after the security review: job v2 #1 and a cancel (2026-09-23)
+
+The security review ([`SECURITY.md`](SECURITY.md)) replaced the escrow. JobEscrow v2
+[`0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355`](https://testnet.monadvision.com/address/0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355) attests into the **same**
+AgentPassport, so agent 1908's record carries on from v1. Job ids restart at 1 in v2. The worker
+therefore publishes under `/jobs/<escrow>/<jobId>/`, and v1's `/jobs/1..5/` files are untouched
+(job #1's served bytes still hash to `0xbbd6a22c…add9`).
+
+| step | who | tx |
+|---|---|---|
+| deploy JobEscrow v2 | deployer (passport owner) | [`0x2f027443…2b20`](https://testnet.monadvision.com/tx/0x2f0274435c38c61ea6953a3539a2a5ad7198cfbfb2ba72da105f3622287d2b20) (block 65011497) |
+| `passport.setAttester(v2, true)` | deployer | [`0x84e531ca…5e70`](https://testnet.monadvision.com/tx/0x84e531ca5e3ed29f716463e0c4c605e249c6cd9f8960d09c4b38bd1025565e70) |
+| `openWithAuthorization` v2 job #1 (0.3 USDC, spec `0x7c4a568c…99cc`); the hirer only signed EIP-3009 and spent 0 MON | relayed by the agent key | [`0xa1bb503e…f641`](https://testnet.monadvision.com/tx/0xa1bb503eeb0ef21b77a5968ba4d0558669803814f4cd335ca8dcf6c4ce0af641) (block 65012936) |
+| **`accept`** once the spec checked out and the scorecard was computed | agentfromzero's worker | [`0x713c6a07…2348`](https://testnet.monadvision.com/tx/0x713c6a07875e0f4b78a5b3b4e0ebf377b380b3862ffa3bbdff0b8e5612682348) (block 65012977) |
+| `deliver` (hash `0x98a0476c…d03a`, [`/jobs/0x41cb…4355/1/deliverable.json`](https://agentfromzero.netlify.app/jobs/0x41cb9b1a7ebe2e1a420d8cd96d02a9009ac54355/1/deliverable.json)) | worker | [`0xef8e15e0…ba31`](https://testnet.monadvision.com/tx/0xef8e15e095806070440ca79af71e34e13abfb65a280e5ba033fb3794e8daba31) (block 65013327) |
+| `release` after `worker/scripts/hirer.ts` matched keccak256(bytes) to the chain | hirer | [`0x413fb905…d5eb`](https://testnet.monadvision.com/tx/0x413fb905565e43c6c758d500d32124f71ce3b8e3e26e69c35a4a3db4415bd5eb) (block 65013362) |
+| USDC approve (0.01) | hirer | [`0x8dfd4dda…0837`](https://testnet.monadvision.com/tx/0x8dfd4dda1b3b62f42173565f97c71c0b9f6bae176b3591c8e16ed2af04830837) |
+| `open` v2 job #2 (0.01 USDC, endpoint `cancel-demo`), never accepted | hirer | [`0x10e78936…da54`](https://testnet.monadvision.com/tx/0x10e789364e176b7a3860e22cd774442d5240914ac52ebbff871f3547647eda54) |
+| `refund` **before the deadline** (a cancel): 2 logs, `JobRefunded` + USDC `Transfer`, no `Attested` | hirer | [`0x8d270c6c…9fd4`](https://testnet.monadvision.com/tx/0x8d270c6c2e8a7018870921d3a8b3e4d35ce287955c484f1c1074b1760a2d9fd4) |
+
+- Checked with cast afterwards: `passportOf(1908)` = **5 settled / 1 refunded / 0 disputed,
+  6.55 USDC**. The cancel left the refund count at 1. On v1 the same job would have added a refund
+  after its deadline (reproduced in `test/ForkFindings.t.sol`). `acceptedAt(1)` = 1790165927, and
+  job v2 #1 has status 3 (Released).
+- The worker took 1 min 50 s from start to `deliver`. Log: [`jobs/v2/1/worker.log`](jobs/v2/1/worker.log).
+  The saved deliverable [`jobs/v2/1/deliverable.json`](jobs/v2/1/deliverable.json) hashes to
+  `0x98a0476c…d03a`.
+
 ## Reproduce
 
 ```sh
 export RPC=https://testnet-rpc.monad.xyz ESC=0x5b197edD258572DEe7C923A6D38D6Db268A266BC PP=0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A
-cast call -r $RPC $ESC "jobCount()(uint256)"                                          # 5
+export ESC2=0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355
+cast call -r $RPC $ESC "jobCount()(uint256)"                                          # 5 (v1)
+cast call -r $RPC $ESC2 "jobCount()(uint256)"                                         # v2: 2 at the time of writing
+cast call -r $RPC $ESC2 "acceptedAt(uint256)(uint64)" 1
 cast call -r $RPC $ESC "getJob(uint256)((uint256,address,address,address,uint128,uint64,uint64,uint64,uint8,bytes32,bytes32))" 1
 cast call -r $RPC $PP  "passportOf(uint256)((uint64,uint64,uint64,uint64,uint64,uint128,address))" 1908
 cast call -r $RPC 0x8004B663056A597Dffe9eCcC1965A193B7388713 "readFeedback(uint256,address,uint64)(int128,uint8,string,string,bool)" 1908 $PP 1

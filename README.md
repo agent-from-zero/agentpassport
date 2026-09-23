@@ -5,10 +5,12 @@
 ERC-8004 feedback that is backed by settled money, not by anyone's word.
 
 > Monad Metropolis hackathon, Track 04: Trust, Identity & AI Infrastructure.
-> **Live on Monad testnet.** 5 jobs: 4 settled, 1 refunded. Job #3 was hired gaslessly, job #4 was
-> released by a Dynamic MPC server wallet, and job #5 was hired and released from the dashboard in
-> the demo video. agentfromzero's worker delivered every job with no human steps. Every transaction
-> is in [`docs/DEMO_LOG.md`](docs/DEMO_LOG.md).
+> **Live on Monad testnet.** 7 jobs across two escrow versions: 5 settled, 1 refunded, 1 cancelled
+> before the agent accepted it. Job #3 was hired gaslessly, job #4 was released by a Dynamic MPC
+> server wallet, and job #5 was hired and released from the dashboard in the demo video. After a
+> security review ([`docs/SECURITY.md`](docs/SECURITY.md)), JobEscrow v2 replaced v1 and took its
+> first live job the same day. agentfromzero's worker delivered every job with no human steps.
+> Every transaction is in [`docs/DEMO_LOG.md`](docs/DEMO_LOG.md).
 >
 > **Try it:** https://agentpassport-monad.netlify.app · **Demo video (2:47):** https://vimeo.com/1229505127 ·
 > **Pitch (1:56):** https://vimeo.com/1229506111. The project and both videos are AI-built and AI-narrated.
@@ -16,7 +18,7 @@ ERC-8004 feedback that is backed by settled money, not by anyone's word.
 | | Monad testnet (chain id 10143) |
 |---|---|
 | `AgentPassport` | [`0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A`](https://testnet.monadvision.com/address/0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A) (Sourcify exact match) |
-| `JobEscrow` | [`0x5b197edD258572DEe7C923A6D38D6Db268A266BC`](https://testnet.monadvision.com/address/0x5b197edD258572DEe7C923A6D38D6Db268A266BC) (Sourcify exact match) |
+| `JobEscrow` (v2) | [`0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355`](https://testnet.monadvision.com/address/0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355) (Sourcify exact match). v1 [`0x5b19…66BC`](https://testnet.monadvision.com/address/0x5b197edD258572DEe7C923A6D38D6Db268A266BC) held jobs #1-#5 and is still an attester of the same passport |
 | Agent: **agentfromzero** | ERC-8004 agentId **1908**, card: https://agentfromzero.netlify.app/.well-known/agent-card.json |
 | Settlement token | Circle USDC `0x534b2f3A21130d7a60830c2Df862319e593943A3` (6 dp, EIP-3009) |
 | ERC-8004 registries | Identity `0x8004A818BFB912233c491871b3d84c89A494BD9e` · Reputation `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
@@ -51,7 +53,7 @@ flowchart LR
     end
 
     subgraph monad [Monad testnet 10143]
-        E[JobEscrow<br/>0x5b19...66BC]
+        E[JobEscrow v2<br/>0x41Cb...4355]
         P[AgentPassport<br/>0xd01E...9d0A]
         U[(Circle USDC<br/>0x534b...43A3)]
         I[ERC-8004 IdentityRegistry<br/>0x8004A8...BD9e]
@@ -62,7 +64,7 @@ flowchart LR
     H -- "1. approve + open(agentId, amount, specHash)" --> E
     E -- "transferFrom" --> U
     E -- "ownerOf(agentId)?" --> I
-    A -- "2. deliver(jobId, keccak(bytes), uri)" --> E
+    A -- "2. accept(jobId), deliver(jobId, keccak(bytes), uri)" --> E
     A -. publishes .-> D
     H -. fetch + hash-check .-> D
     H -- "3. release(jobId) or releaseWithPasskey(...)" --> E
@@ -74,10 +76,13 @@ flowchart LR
     C -- "readFeedback(agentId, AgentPassport, i)" --> R
 ```
 
-Lifecycle of a job: `Open → Delivered → Released` (paid), or `Open → Refunded` (deadline passed,
-no delivery), or `Delivered → Disputed` (hirer objects inside the review window). Each terminal
-state is attested into the passport; `Settled` and `Disputed` are mirrored to ERC-8004 (1.00 /
-0.00), `Refunded` is recorded on the passport only.
+Lifecycle of a job: `Open → (accepted) → Delivered → Released` (paid), or `Open → Refunded`, or
+`Delivered → Disputed` (hirer objects inside the review window). The agent calls `accept` before it
+starts work (`deliver` implies it) and can deliver only up to the deadline. Until the agent accepts,
+the hirer can cancel at any time, and the passport is not touched. So nobody can put a mark on an
+agent by opening a job it never took. After acceptance, a refund is possible only after the deadline,
+and it is recorded as the agent's no-show. `Settled` and `Disputed` are mirrored to ERC-8004
+(1.00 / 0.00); `Refunded` is recorded on the passport only.
 
 Four ways a release can be authorised: the hirer; an optional per-job `verifier` address (an
 oracle, a CRE workflow, another agent); the hirer's registered **passkey** (WebAuthn assertion over
@@ -109,10 +114,11 @@ src/
   mocks/        MockUSDC, MockIdentityRegistry, MockReputationRegistry (local tests only)
   AgentPassport.sol, JobEscrow.sol
 test/           Foundry tests: unit, fuzz, reentrancy, P256/WebAuthn vectors, fork tests vs live testnet
-script/         Deploy.s.sol (contracts), Register.s.sol (ERC-8004 identity)
+script/         Deploy.s.sol (both contracts), DeployEscrowV2.s.sol (escrow upgrade), Register.s.sol (ERC-8004 identity)
 broadcast/      Foundry broadcast artifacts for chain 10143 (tx hashes of every deploy/register)
 deploy/         Network constants + deployed addresses (single source of truth)
-docs/           DEMO_LOG.md (every tx of jobs #1-#4 + the x402 payments), BOUNTIES.md, TRACTION.md, jobs/<id>/
+docs/           DEMO_LOG.md (every tx of every job + the x402 payments), SECURITY.md (review + slither), BOUNTIES.md,
+                TRACTION.md, SUBMISSION.md, jobs/<id>/ (v1), jobs/v2/<id>/
 sdk/            TypeScript SDK (viem, ESM), published as @agentfromzero/agentpassport-sdk
 worker/         agentfromzero's hire-flow worker (watch JobEscrow → spec → skill → publish → deliver) + hirer/payer scripts
 indexer/        Envio HyperIndex indexer (JobEscrow + AgentPassport + ERC-8004) + rpc-proxy + Nansen snapshot publisher
@@ -137,10 +143,11 @@ forge build
 ### Tests
 
 ```sh
-# Unit + fuzz + P256/WebAuthn vectors, fully offline (54 tests)
+# Unit + fuzz + P256/WebAuthn vectors + the security-review findings, fully offline (69 tests)
 SKIP_FORK_TESTS=1 forge test
 
-# Everything, including 5 fork tests against the live ERC-8004 registries and Circle USDC
+# Everything, including 7 fork tests against the live ERC-8004 registries, Circle USDC and our
+# deployed contracts (test/ForkFindings.t.sol reproduces finding F-1 on v1 and shows v2 fixes it)
 # on Monad testnet at a pinned block (needs network; uses https://testnet-rpc.monad.xyz by default)
 forge test
 MONAD_TESTNET_RPC=https://rpc.ankr.com/monad_testnet forge test --match-path test/Fork.t.sol -vv
@@ -205,13 +212,14 @@ AGENT_PRIVATE_KEY=0x… AGENT_URI=https://your.site/.well-known/agent-card.json 
 
 ```sh
 export RPC=https://testnet-rpc.monad.xyz
-export ESC=0x5b197edD258572DEe7C923A6D38D6Db268A266BC USDC=0x534b2f3A21130d7a60830c2Df862319e593943A3
+export ESC=0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355 USDC=0x534b2f3A21130d7a60830c2Df862319e593943A3
 # hirer
 cast send -r $RPC --private-key $HIRER $USDC "approve(address,uint256)" $ESC 5000000
 cast send -r $RPC --private-key $HIRER $ESC \
   "open((uint256,address,uint128,uint64,uint64,address,bytes32,string))" \
   "(1908,$USDC,5000000,$(( $(cast block -r $RPC latest -f timestamp) + 86400 )),3600,0x0000000000000000000000000000000000000000,$SPEC_HASH,census)"
-# agent
+# agent: take the job (optional, deliver implies it), then commit to the bytes before the deadline
+cast send -r $RPC --private-key $AGENT $ESC "accept(uint256)" 1
 cast send -r $RPC --private-key $AGENT $ESC "deliver(uint256,bytes32,string)" 1 $DELIVERABLE_HASH https://…/deliverable.json
 # hirer (after checking keccak256(curl …) == DELIVERABLE_HASH)
 cast send -r $RPC --private-key $HIRER $ESC "release(uint256)" 1
@@ -301,6 +309,12 @@ entry from `AgentPassport` can always be traced back to the escrow job and its `
 
 ## Security notes
 
+Full review: [`docs/SECURITY.md`](docs/SECURITY.md). It covers the threat model, 7 findings (5 fixed
+in JobEscrow v2, 2 accepted design limits), the Slither triage (0 high / 0 medium), and a fork proof
+of concept against the deployed v1.
+
+- Agents accept jobs; unaccepted jobs can be cancelled and never touch the passport; no delivery
+  after the deadline; review window ≤ 30 days; endpoint label ≤ 256 bytes (JobEscrow v2).
 - Checks-effects-interactions plus a mutex on every path that moves tokens; reentrancy is
   tested with a malicious token.
 - One settlement token per escrow (constructor-pinned) so a third party cannot bind an agent's
@@ -312,7 +326,8 @@ entry from `AgentPassport` can always be traced back to the escrow job and its `
 - Feedback mirroring is a low-level call whose success is only *reported* (`FeedbackMirrored`), so
   a registry upgrade can never lock funds in escrow.
 - The passport `owner` is meant to be handed to a timelock or `address(0)` once the attester set
-  is final. Not audited; testnet only.
+  is final. v1 stays an attester so no hirer's funds can ever be stuck in it. Not audited; testnet
+  only. Disputes are v0: a refund plus a 0.00 mark, with no resolver yet (SECURITY.md, F-6).
 
 ## Sponsor integrations
 

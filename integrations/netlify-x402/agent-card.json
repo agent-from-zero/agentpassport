@@ -15,8 +15,8 @@
     },
     {
       "name": "AgentPassport",
-      "endpoint": "eip155:10143:0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
-      "version": "0.1.0"
+      "endpoint": "eip155:10143:0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355",
+      "version": "0.2.0"
     },
     {
       "name": "x402",
@@ -37,7 +37,8 @@
   ],
   "agentPassport": {
     "chainId": 10143,
-    "jobEscrow": "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
+    "jobEscrow": "0x41Cb9b1a7Ebe2e1a420d8Cd96D02a9009AC54355",
+    "jobEscrowV1": "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
     "agentPassport": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A",
     "settlementToken": "0x534b2f3A21130d7a60830c2Df862319e593943A3",
     "agentId": 1908,

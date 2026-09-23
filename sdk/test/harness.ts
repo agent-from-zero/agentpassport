@@ -105,6 +105,7 @@ export async function startDevChain(opts: { maxLogRange?: bigint } = {}): Promis
   await send(d, passportAddr, artifact("AgentPassport.sol", "AgentPassport").abi, "setAttester", [escrowAddr, true]);
   await send(wallets.agent, identityAddr, identity.abi, "register", ["data:application/json;base64," + btoa(JSON.stringify({ name: "test-agent" }))]);
   await send(d, usdcAddr, usdc.abi, "mint", [wallets.hirer.account!.address, parseUsdc("100")]);
+  await send(d, usdcAddr, usdc.abi, "mint", [wallets.stranger.account!.address, parseUsdc("1")]);
 
   const deployment: Deployment = {
     chainId: 31337,

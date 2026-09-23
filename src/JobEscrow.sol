@@ -17,6 +17,12 @@ contract JobEscrow is IJobEscrow {
     /// @dev Domain tag for `openNonce`: keccak256("AgentPassport.JobEscrow.openWithAuthorization").
     bytes32 internal constant OPEN_AUTH_TYPEHASH = keccak256("AgentPassport.JobEscrow.openWithAuthorization");
 
+    /// @inheritdoc IJobEscrow
+    uint64 public constant MAX_REVIEW_WINDOW = 30 days;
+
+    /// @inheritdoc IJobEscrow
+    uint256 public constant MAX_ENDPOINT_LENGTH = 256;
+
     IIdentityRegistry internal immutable _identity;
     IAgentPassport internal immutable _passport;
     address internal immutable _token;
@@ -25,6 +31,7 @@ contract JobEscrow is IJobEscrow {
     mapping(uint256 => Job) internal _jobs;
     mapping(uint256 => string) internal _endpoints; // jobId => endpoint label (forwarded to feedback)
     mapping(address => PasskeyPubKey) internal _passkeys; // hirer => registered P256 key
+    mapping(uint256 => uint64) internal _acceptedAt; // jobId => when the agent accepted (0 = not)
 
     uint256 internal _lock = 1;
 
@@ -98,9 +105,15 @@ contract JobEscrow is IJobEscrow {
         if (p.token != _token) revert UnsupportedToken(p.token);
         if (p.amount == 0) revert ZeroAmount();
         if (p.deadline <= block.timestamp) revert BadDeadline();
-        // Reverts (ERC721NonexistentToken) if the agent does not exist.
-        try _identity.ownerOf(p.agentId) returns (address) {}
-        catch {
+        if (p.reviewWindow > MAX_REVIEW_WINDOW) revert BadReviewWindow(p.reviewWindow, MAX_REVIEW_WINDOW);
+        // The endpoint is stored and forwarded on every settlement, whoever pays for it; bound it
+        // so a hirer cannot make the agent's timeout release arbitrarily expensive.
+        if (bytes(p.endpoint).length > MAX_ENDPOINT_LENGTH) revert EndpointTooLong(bytes(p.endpoint).length);
+        // ERC-721 ownerOf reverts for a nonexistent token; a registry that returns 0 instead is
+        // treated the same way.
+        try _identity.ownerOf(p.agentId) returns (address agentOwner) {
+            if (agentOwner == address(0)) revert UnknownAgent(p.agentId);
+        } catch {
             revert UnknownAgent(p.agentId);
         }
 
@@ -120,18 +133,39 @@ contract JobEscrow is IJobEscrow {
         emit JobOpened(jobId, p.agentId, hirer, p.token, p.amount, p.deadline, p.specHash, p.endpoint);
     }
 
-    // ───────────────────────────── deliver ─────────────────────────────
+    // ───────────────────────────── accept / deliver ─────────────────────────────
+
+    /// @inheritdoc IJobEscrow
+    function accept(uint256 jobId) external {
+        Job storage j = _jobs[jobId];
+        _checkAgentCanAct(jobId, j);
+        if (_acceptedAt[jobId] != 0) revert AlreadyAccepted(jobId);
+        _accept(jobId, j);
+    }
 
     /// @inheritdoc IJobEscrow
     function deliver(uint256 jobId, bytes32 deliverableHash, string calldata deliverableURI) external {
         Job storage j = _jobs[jobId];
-        if (j.status != Status.Open) revert InvalidStatus(jobId, j.status);
-        if (!_isAgent(j.agentId, msg.sender)) revert NotAgent(jobId, msg.sender);
+        _checkAgentCanAct(jobId, j);
+        if (_acceptedAt[jobId] == 0) _accept(jobId, j);
 
         j.status = Status.Delivered;
         j.deliveredAt = uint64(block.timestamp);
         j.deliverableHash = deliverableHash;
         emit JobDelivered(jobId, j.agentId, deliverableHash, deliverableURI);
+    }
+
+    /// @dev The agent may accept / deliver only an Open job, only up to its deadline (inclusive;
+    ///      `refund` opens strictly after it), and only as owner / operator / agentWallet.
+    function _checkAgentCanAct(uint256 jobId, Job storage j) internal view {
+        if (j.status != Status.Open) revert InvalidStatus(jobId, j.status);
+        if (block.timestamp > j.deadline) revert DeadlinePassed(jobId, j.deadline);
+        if (!_isAgent(j.agentId, msg.sender)) revert NotAgent(jobId, msg.sender);
+    }
+
+    function _accept(uint256 jobId, Job storage j) internal {
+        _acceptedAt[jobId] = uint64(block.timestamp);
+        emit JobAccepted(jobId, j.agentId, msg.sender);
     }
 
     /// @dev Owner, approved operator, or the registered agentWallet may act for the agent.
@@ -192,14 +226,19 @@ contract JobEscrow is IJobEscrow {
         Job storage j = _jobs[jobId];
         if (j.status != Status.Open) revert InvalidStatus(jobId, j.status);
         if (msg.sender != j.hirer) revert NotHirer(jobId, msg.sender);
-        if (block.timestamp <= j.deadline) revert DeadlineNotPassed(jobId, j.deadline);
+        // An unaccepted job is the hirer's to cancel at any time and says nothing about the agent,
+        // who may never have seen it. Once accepted, the agent has until the deadline.
+        bool accepted = _acceptedAt[jobId] != 0;
+        if (accepted && block.timestamp <= j.deadline) revert DeadlineNotPassed(jobId, j.deadline);
 
         j.status = Status.Refunded;
         uint256 amount = j.amount;
         emit JobRefunded(jobId, j.agentId, amount);
-        _passport.attest(
-            j.agentId, _jobRef(jobId), IAgentPassport.Outcome.Refunded, j.token, 0, j.hirer, _endpoints[jobId]
-        );
+        if (accepted) {
+            _passport.attest(
+                j.agentId, _jobRef(jobId), IAgentPassport.Outcome.Refunded, j.token, 0, j.hirer, _endpoints[jobId]
+            );
+        }
         if (!IERC20(j.token).transfer(j.hirer, amount)) revert TransferFailed();
     }
 
@@ -241,6 +280,16 @@ contract JobEscrow is IJobEscrow {
     }
 
     // ───────────────────────────── views ─────────────────────────────
+
+    /// @inheritdoc IJobEscrow
+    function acceptedAt(uint256 jobId) external view returns (uint64) {
+        return _acceptedAt[jobId];
+    }
+
+    /// @inheritdoc IJobEscrow
+    function version() external pure returns (string memory) {
+        return "2";
+    }
 
     function getJob(uint256 jobId) external view returns (Job memory) {
         return _jobs[jobId];

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  MONAD_TESTNET,
+  MONAD_TESTNET, MONAD_TESTNET_V1,
   POLICIES,
   evaluatePolicy,
   formatFixed,
@@ -58,7 +58,7 @@ describe("policy", () => {
 describe("encoding helpers", () => {
   it("jobRef matches the feedbackHash AgentPassport wrote for live job #1", () => {
     // From the ERC-8004 NewFeedback event of job #1 on Monad testnet (docs/DEMO_LOG.md).
-    expect(jobRef(MONAD_TESTNET.jobEscrow, 1n)).toBe("0x59b0cd74884898c6b07be35f5900dda1045d7307cdccc0d7aae7d9491ffffd9d");
+    expect(jobRef(MONAD_TESTNET_V1.jobEscrow, 1n)).toBe("0x59b0cd74884898c6b07be35f5900dda1045d7307cdccc0d7aae7d9491ffffd9d");
   });
 
   it("hashContent is keccak256 over UTF-8 bytes, same for string and bytes", () => {

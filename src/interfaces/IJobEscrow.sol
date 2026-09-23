@@ -3,7 +3,10 @@ pragma solidity ^0.8.28;
 
 /// @title IJobEscrow — hire an ERC-8004 agent with USDC held in escrow
 /// @notice Lifecycle: Open -> Delivered -> Released (paid) | Refunded (timeout) | Disputed.
-///         Every terminal state is attested into `IAgentPassport`.
+///         An Open job is *unaccepted* until the agent calls `accept` (or `deliver`, which implies
+///         acceptance). Released and Disputed are always attested into `IAgentPassport`; Refunded is
+///         attested only for an accepted job ("the agent committed and did not deliver"), so nobody
+///         can put a mark on an agent's passport by opening a job the agent never took.
 /// @dev Release authorisation paths (any one suffices):
 ///        1. the hirer (EOA or smart wallet) calls `release`;
 ///        2. the hirer's registered passkey signs a WebAuthn assertion over `releaseDigest(jobId)`,
@@ -52,6 +55,7 @@ interface IJobEscrow {
         bytes32 specHash,
         string endpoint
     );
+    event JobAccepted(uint256 indexed jobId, uint256 indexed agentId, address indexed by);
     event JobDelivered(uint256 indexed jobId, uint256 indexed agentId, bytes32 deliverableHash, string deliverableURI);
     event JobReleased(uint256 indexed jobId, uint256 indexed agentId, address indexed releasedBy, uint256 amount);
     event JobRefunded(uint256 indexed jobId, uint256 indexed agentId, uint256 amount);
@@ -73,6 +77,10 @@ interface IJobEscrow {
     error UnsupportedToken(address token);
     error AuthorizationMismatch(bytes32 expectedNonce, bytes32 givenNonce);
     error InvalidPasskey();
+    error DeadlinePassed(uint256 jobId, uint64 deadline);
+    error AlreadyAccepted(uint256 jobId);
+    error BadReviewWindow(uint64 reviewWindow, uint64 max);
+    error EndpointTooLong(uint256 length);
 
     /// @notice Parameters for opening a job.
     /// @param agentId  Agent to hire (must exist in the ERC-8004 IdentityRegistry).
@@ -82,10 +90,13 @@ interface IJobEscrow {
     /// @param amount   Escrowed amount in token units.
     /// @param deadline Unix time after which the hirer can refund an undelivered job.
     /// @param reviewWindow Seconds after delivery in which the hirer may dispute; after it passes,
-    ///                 anyone may finalise the release.
+    ///                 anyone may finalise the release. At most `MAX_REVIEW_WINDOW` (30 days). A window
+    ///                 of 0 lets the agent finalise from the next second on: only sensible with a
+    ///                 `verifier`, or when the hirer releases in the same flow.
     /// @param verifier Optional address allowed to release on the hirer's behalf.
     /// @param specHash keccak256 of the job specification.
-    /// @param endpoint Free-form label of the skill/endpoint being hired (forwarded to feedback).
+    /// @param endpoint Free-form label of the skill/endpoint being hired (forwarded to feedback),
+    ///                 at most `MAX_ENDPOINT_LENGTH` (256) bytes.
     struct OpenParams {
         uint256 agentId;
         address token;
@@ -122,7 +133,14 @@ interface IJobEscrow {
     ///         exactly this job (chain, escrow, all OpenParams, validity window).
     function openNonce(OpenParams calldata p, uint256 validAfter, uint256 validBefore) external view returns (bytes32);
 
+    /// @notice Agent (owner, operator or agentWallet of `agentId`) commits to an Open job before its
+    ///         deadline. From then on the hirer can refund only after the deadline, and that refund
+    ///         is recorded on the agent's passport. Optional: `deliver` implies acceptance.
+    function accept(uint256 jobId) external;
+
     /// @notice Agent (owner, operator or agentWallet of `agentId`) submits the deliverable hash.
+    ///         Only while the job is Open and not past its deadline, so a late delivery cannot
+    ///         front-run the hirer's refund. Marks the job accepted if it was not already.
     function deliver(uint256 jobId, bytes32 deliverableHash, string calldata deliverableURI) external;
 
     /// @notice Releases escrow to the agent wallet. Callable by hirer or verifier at any time
@@ -143,7 +161,9 @@ interface IJobEscrow {
         uint256 s
     ) external;
 
-    /// @notice Hirer refunds an Open job after the deadline (no delivery).
+    /// @notice Hirer takes back the escrow of an Open (undelivered) job:
+    ///         - not accepted by the agent: at any time (a cancel); the passport is not touched;
+    ///         - accepted: only after the deadline; the passport records a refund against the agent.
     function refund(uint256 jobId) external;
 
     /// @notice Hirer disputes within the review window. v0: funds return to hirer and the
@@ -156,10 +176,19 @@ interface IJobEscrow {
     /// @notice The 32-byte challenge a passkey must sign to release `jobId` (domain-separated).
     function releaseDigest(uint256 jobId) external view returns (bytes32);
 
+    /// @notice When the agent accepted `jobId` (0 = not accepted).
+    function acceptedAt(uint256 jobId) external view returns (uint64);
+
     function getJob(uint256 jobId) external view returns (Job memory);
     function jobCount() external view returns (uint256);
     function passport() external view returns (address);
     function identityRegistry() external view returns (address);
     /// @notice The single settlement token this escrow accepts (Circle USDC on Monad).
     function settlementToken() external view returns (address);
+    /// @notice Upper bound on `OpenParams.reviewWindow` (30 days).
+    function MAX_REVIEW_WINDOW() external view returns (uint64);
+    /// @notice Upper bound on `bytes(OpenParams.endpoint).length` (256).
+    function MAX_ENDPOINT_LENGTH() external view returns (uint256);
+    /// @notice "2": agent acceptance, delivery deadline, bounded review window and endpoint.
+    function version() external pure returns (string memory);
 }

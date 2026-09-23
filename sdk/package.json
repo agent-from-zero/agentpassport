@@ -1,6 +1,6 @@
 {
   "name": "@agentfromzero/agentpassport-sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript SDK for AgentPassport: escrow-backed ERC-8004 reputation for AI agents on Monad. Read passports, check hiring policies, hire/deliver/release through USDC escrow, gasless EIP-3009 opens.",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,7 +1,10 @@
 // The hire-flow worker: the loop that makes an ERC-8004 agent hireable through JobEscrow.
 //
 //   JobOpened(agentId = ours) ─▶ re-read job on chain ─▶ fetch spec by specHash (hash-checked)
-//     ─▶ run skill ─▶ publish deliverable bytes (served-bytes check) ─▶ deliver(jobId, keccak, uri)
+//     ─▶ run skill ─▶ accept(jobId) ─▶ publish deliverable bytes (served-bytes check)
+//     ─▶ deliver(jobId, keccak, uri)
+//   The worker accepts only once the spec checks pass and the skill has produced its output: a job it skips stays unaccepted, so the
+//   hirer can cancel it at once and nothing lands on the passport (JobEscrow v2).
 //   JobReleased(ours) ─▶ log "paid"
 //
 // Discovery is two-layered because public Monad RPCs cap eth_getLogs at 100 blocks: on start (and
@@ -34,6 +37,7 @@ export interface WorkerOptions {
 
 interface JobRecord {
   status: "delivered" | "skipped" | "failed" | "paid";
+  acceptTx?: Hex;
   reason?: string;
   deliverTx?: Hex;
   deliverableURI?: string;
@@ -151,6 +155,14 @@ export class Worker {
         if (e instanceof SpecError) return this.skip(jobId, `bad spec: ${e.message}`);
         throw e;
       }
+      // The spec is valid and the output computed: commit before the slow publish step, so the
+      // hirer cannot cancel mid-job. null = escrow without acceptance (v1).
+      let acceptTx: Hex | undefined;
+      if ((await this.opts.client.acceptedAt(jobId)) === 0n) {
+        const tx = await this.opts.client.accept(jobId);
+        acceptTx = tx.hash;
+        this.opts.log("info", "accepted", { jobId: key, tx: tx.hash, block: tx.receipt.blockNumber.toString() });
+      }
       const bytes = this.render(jobId, job, skill, output);
       const deliverableHash = hashContent(bytes);
       const uri = await this.opts.publisher.publish(jobId, bytes);
@@ -158,7 +170,7 @@ export class Worker {
 
       const tx = await this.opts.client.deliver(jobId, { uri, hash: deliverableHash });
       this.opts.log("info", "delivered", { jobId: key, tx: tx.hash, block: tx.receipt.blockNumber.toString(), gasUsed: tx.receipt.gasUsed.toString() });
-      return this.record(jobId, { status: "delivered", deliverTx: tx.hash, deliverableURI: uri, deliverableHash, at: new Date().toISOString() });
+      return this.record(jobId, { status: "delivered", acceptTx, deliverTx: tx.hash, deliverableURI: uri, deliverableHash, at: new Date().toISOString() });
     } catch (e) {
       const reason = describeError(e);
       this.opts.log("error", "job failed", { jobId: key, reason });

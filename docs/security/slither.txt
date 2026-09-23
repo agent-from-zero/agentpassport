@@ -1,0 +1,59 @@
+INFO:Detectors:
+Detector: uninitialized-local
+WebAuthn._base64Url(bytes32).o (src/libraries/WebAuthn.sol#61) is a local variable never initialized
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#uninitialized-local-variables
+INFO:Detectors:
+Detector: missing-zero-check
+AgentPassport.transferOwnership(address).newOwner (src/AgentPassport.sol#62) lacks a zero-check on :
+		- owner = newOwner (src/AgentPassport.sol#64)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+INFO:Detectors:
+Detector: reentrancy-events
+Reentrancy in AgentPassport._mirrorFeedback(uint256,bytes32,IAgentPassport.Outcome,string) (src/AgentPassport.sol#107-121):
+	External calls:
+	- (ok,None) = address(_reputation).call(abi.encodeCall(IReputationRegistry.giveFeedback,(agentId,value,VALUE_DECIMALS,TAG1,tag2,endpoint,,jobRef))) (src/AgentPassport.sol#112-117)
+	Event emitted after the call(s):
+	- FeedbackMirrored(agentId,jobRef,ok) (src/AgentPassport.sol#120)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
+INFO:Detectors:
+Detector: timestamp
+AgentPassport.meets(uint256,IAgentPassport.Policy) (src/AgentPassport.sol#131-141) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp - p.lastSettled > policy.maxAgeOfLastSettlement (src/AgentPassport.sol#138)
+JobEscrow._create(IJobEscrow.OpenParams,address) (src/JobEscrow.sol#104-134) uses timestamp for comparisons
+	Dangerous comparisons:
+	- p.deadline <= block.timestamp (src/JobEscrow.sol#107)
+JobEscrow._checkAgentCanAct(uint256,IJobEscrow.Job) (src/JobEscrow.sol#160-164) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > j.deadline (src/JobEscrow.sol#162)
+JobEscrow.release(uint256) (src/JobEscrow.sol#180-187) uses timestamp for comparisons
+	Dangerous comparisons:
+	- windowElapsed = block.timestamp > uint256(j.deliveredAt) + j.reviewWindow (src/JobEscrow.sol#184)
+	- ! privileged && ! windowElapsed (src/JobEscrow.sol#185)
+JobEscrow.refund(uint256) (src/JobEscrow.sol#225-243) uses timestamp for comparisons
+	Dangerous comparisons:
+	- accepted && block.timestamp <= j.deadline (src/JobEscrow.sol#232)
+JobEscrow.dispute(uint256) (src/JobEscrow.sol#246-261) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > until (src/JobEscrow.sol#251)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+INFO:Detectors:
+Detector: low-level-calls
+Low level call in AgentPassport._mirrorFeedback(uint256,bytes32,IAgentPassport.Outcome,string) (src/AgentPassport.sol#107-121):
+	- (ok,None) = address(_reputation).call(abi.encodeCall(IReputationRegistry.giveFeedback,(agentId,value,VALUE_DECIMALS,TAG1,tag2,endpoint,,jobRef))) (src/AgentPassport.sol#112-117)
+Low level call in P256.verify(bytes32,uint256,uint256,uint256,uint256) (src/libraries/P256.sol#20-24):
+	- (success,result) = VERIFIER.staticcall(abi.encodePacked(hash,r,s,qx,qy)) (src/libraries/P256.sol#22)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+INFO:Detectors:
+Detector: naming-convention
+Function IJobEscrow.MAX_REVIEW_WINDOW() (src/interfaces/IJobEscrow.sol#189) is not in mixedCase
+Function IJobEscrow.MAX_ENDPOINT_LENGTH() (src/interfaces/IJobEscrow.sol#191) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+INFO:Detectors:
+Detector: too-many-digits
+P256.slitherConstructorConstantVariables() (src/libraries/P256.sol#9-25) uses literals with too many digits:
+	- N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551 (src/libraries/P256.sol#13)
+P256.slitherConstructorConstantVariables() (src/libraries/P256.sol#9-25) uses literals with too many digits:
+	- N_DIV_2 = 0x7FFFFFFF800000007FFFFFFFFFFFFFFFDE737D56D38BCF4279DCA3B9DECD5D1B (src/libraries/P256.sol#14)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#too-many-digits
+INFO:Slither:. analyzed (13 contracts with 102 detectors), 15 result(s) found

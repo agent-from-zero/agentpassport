@@ -73,6 +73,9 @@ describe("worker", () => {
     const w = makeWorker();
     expect(await w.catchUp()).toEqual([jobId]);
     expect(w.jobs[jobId.toString()]?.status).toBe("delivered");
+    expect(w.jobs[jobId.toString()]?.acceptTx).toMatch(/^0x/);
+    expect(await dev.sdk.hirer.acceptedAt(jobId)).toBeGreaterThan(0n);
+    expect(logs.findIndex((l) => l.msg === "accepted")).toBeLessThan(logs.findIndex((l) => l.msg === "delivered"));
     expect(logs.some((l) => l.msg === "spec copy rejected" && String(l.extra?.reason).startsWith("hash mismatch"))).toBe(true);
 
     const job = await dev.sdk.hirer.getJob(jobId);
@@ -105,7 +108,12 @@ describe("worker", () => {
     expect(reason(badSkill.jobId)).toMatchObject({ status: "skipped", reason: 'unsupported skill "write-poetry"' });
     expect(reason(badSpec.jobId)).toMatchObject({ status: "skipped", reason: expect.stringContaining("bad spec") });
     expect(reason(tooCheap.jobId)).toMatchObject({ status: "skipped", reason: expect.stringContaining("below minimum") });
-    for (const id of [unknownSpec.jobId, badSkill.jobId, badSpec.jobId, tooCheap.jobId]) expect((await dev.sdk.hirer.getJob(id)).status).toBe(JobStatus.Open);
+    for (const id of [unknownSpec.jobId, badSkill.jobId, badSpec.jobId, tooCheap.jobId]) {
+      expect((await dev.sdk.hirer.getJob(id)).status).toBe(JobStatus.Open);
+      expect(await dev.sdk.hirer.acceptedAt(id)).toBe(0n); // skipped jobs stay unaccepted: the hirer can cancel at once
+    }
+    await dev.sdk.hirer.refund(unknownSpec.jobId);
+    expect((await dev.sdk.hirer.getPassport(dev.agentId)).jobsRefunded).toBe(0n);
   });
 
   it("watch mode: picks up a new JobOpened event, delivers, then logs the release as paid", async () => {
@@ -129,5 +137,20 @@ describe("worker", () => {
       w.stop();
     }
     expect((await dev.sdk.hirer.getPassport(dev.agentId)).jobsSettled).toBe(1n);
+  });
+});
+
+describe("DirPublisher", () => {
+  it("scopes job folders with pathPrefix (job ids restart at 1 in every escrow)", async () => {
+    const d = mkdtempSync(join(tmpdir(), "pub-"));
+    const bytes = new TextEncoder().encode('{"v":2}\n');
+    const served = (async (url: string) => {
+      const path = new URL(url).pathname.slice(1);
+      return new Response(readFileSync(join(d, path)));
+    }) as typeof fetch;
+    const pub = new DirPublisher({ dir: d, baseUrl: "https://agent.example/", pathPrefix: "/jobs/0xescrow2/", fetch: served, verifyTimeoutMs: 1000 });
+    expect(await pub.publish(1n, bytes)).toBe("https://agent.example/jobs/0xescrow2/1/deliverable.json");
+    expect(hashContent(readFileSync(join(d, "jobs", "0xescrow2", "1", "deliverable.json")))).toBe(hashContent(bytes));
+    rmSync(d, { recursive: true, force: true });
   });
 });

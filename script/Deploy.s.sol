@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Script, console} from "forge-std/Script.sol";
+import {VmSafe} from "forge-std/Vm.sol";
 import {AgentPassport} from "../src/AgentPassport.sol";
 import {JobEscrow} from "../src/JobEscrow.sol";
 
@@ -11,7 +12,8 @@ import {JobEscrow} from "../src/JobEscrow.sol";
 ///
 ///   forge script script/Deploy.s.sol:Deploy --rpc-url monad_testnet --broadcast
 ///
-/// On broadcast the script writes the new addresses into deploy/addresses.json (committed), which
+/// Without --broadcast it is a dry run (simulated against the live chain; nothing is sent and
+/// deploy/addresses.json is left alone). On broadcast the script writes the new addresses into deploy/addresses.json (committed), which
 /// the SDK, the app and the README read as the single source of truth. Tx hashes are in
 /// broadcast/Deploy.s.sol/10143/run-latest.json.
 contract Deploy is Script {
@@ -41,8 +43,13 @@ contract Deploy is Script {
         console.log("JobEscrow:    ", address(escrow));
         console.log("USDC (Circle):", cfg.usdc);
 
-        _record(address(passport), address(escrow), deployer);
-        console.log("Recorded in deploy/addresses.json; verify sources next (see deploy/README.md).");
+        // Only a real broadcast may overwrite the committed addresses; a dry run just prints them.
+        if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            _record(address(passport), address(escrow), deployer);
+            console.log("Recorded in deploy/addresses.json; verify sources next (see deploy/README.md).");
+        } else {
+            console.log("Dry run: deploy/addresses.json not modified.");
+        }
     }
 
     function _loadConfig() internal view returns (NetworkConfig memory cfg) {

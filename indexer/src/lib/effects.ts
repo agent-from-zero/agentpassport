@@ -1,9 +1,9 @@
 import { S, createEffect } from "envio";
 import { createPublicClient, http, parseAbi } from "viem";
+import { parseJobKey } from "./util.js";
 
 const RPC_URL = process.env.ENVIO_MONAD_RPC_URL ?? "http://localhost:8545";
 const IDENTITY = "0x8004A818BFB912233c491871b3d84c89A494BD9e" as const;
-const ESCROW = "0x5b197edD258572DEe7C923A6D38D6Db268A266BC" as const;
 
 const client = createPublicClient({ transport: http(RPC_URL, { batch: true, retryCount: 5, retryDelay: 1500 }) });
 
@@ -45,7 +45,10 @@ export const readIdentity = createEffect(
   },
 );
 
-/** A job's verifier is fixed at open time and not in any event; read it once per released job. */
+/**
+ * A job's verifier is fixed at open time and not in any event; read it once per released job.
+ * Input is the Job entity id (`${escrow}-${jobId}`): v1 and v2 share `getJob`'s layout.
+ */
 export const readJobVerifier = createEffect(
   {
     name: "readJobVerifier",
@@ -55,7 +58,8 @@ export const readJobVerifier = createEffect(
     cache: true,
   },
   async ({ input }) => {
-    const job = await client.readContract({ address: ESCROW, abi: escrowAbi, functionName: "getJob", args: [BigInt(input)] });
+    const { escrow, jobId } = parseJobKey(input);
+    const job = await client.readContract({ address: escrow, abi: escrowAbi, functionName: "getJob", args: [jobId] });
     return job.verifier.toLowerCase();
   },
 );

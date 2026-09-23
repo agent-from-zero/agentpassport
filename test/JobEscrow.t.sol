@@ -137,13 +137,15 @@ contract JobEscrowTest is BaseTest {
 
     // ───────────── refund ─────────────
 
-    function test_refund_afterDeadline() public {
+    function test_refund_acceptedJob_afterDeadline() public {
         uint256 jobId = _openJob();
         uint256 before = usdc.balanceOf(hirer);
+        vm.prank(agentWallet);
+        escrow.accept(jobId);
 
         vm.prank(hirer);
-        vm.expectRevert();
-        escrow.refund(jobId); // deadline not passed
+        vm.expectRevert(abi.encodeWithSelector(IJobEscrow.DeadlineNotPassed.selector, jobId, _params().deadline));
+        escrow.refund(jobId); // accepted: the agent has until the deadline
 
         vm.warp(block.timestamp + 1 days + 1);
         vm.prank(hirer);

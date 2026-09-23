@@ -1,11 +1,14 @@
 // AgentPassport dashboard. Everything on the page comes from Monad testnet over public RPC (through
 // @agentfromzero/agentpassport-sdk) or from the published Envio index snapshot. The only write path
-// is the hire flow, signed by the visitor's own injected wallet (EIP-6963 / window.ethereum).
+// is the hire flow, signed by the visitor's own injected wallet (EIP-6963 / window.ethereum), and
+// it always goes to JobEscrow v2 (MONAD_TESTNET). JobEscrow v1 is read for its closed history jobs.
 import {
   type Address,
   type EIP1193Provider,
   type Hex,
   type WalletClient,
+  BaseError,
+  ContractFunctionRevertedError,
   createPublicClient,
   createWalletClient,
   custom,
@@ -18,7 +21,9 @@ import {
   AGENTFROMZERO_AGENT_ID,
   JobStatus,
   MONAD_TESTNET as D,
+  MONAD_TESTNET_V1 as D_V1,
   POLICIES,
+  type Deployment,
   type IndexSnapshot,
   type IndexedAgent,
   type Job,
@@ -44,7 +49,14 @@ const DYNAMIC_VERIFIER = "0xf02Aa56969f5C71D77d89eb85D962E72A01B3b11";
 const AGENT = AGENTFROMZERO_AGENT_ID;
 const CHAIN_HEX = "0x279f"; // 10143
 const TICK_MS = 2500;
-const BACKFILL_BLOCKS = 500n;
+const BACKFILL_BLOCKS = 3000n; // ~20 min of Monad blocks, walked 6 windows per tick
+const SECURITY_DOC = "https://github.com/agent-from-zero/agentpassport/blob/main/docs/SECURITY.md";
+// What a hire from this page commits to. JobEscrow v2 rejects reviewWindow > 30 days
+// (BadReviewWindow) and an endpoint label over 256 bytes (EndpointTooLong).
+const HIRE_ENDPOINT = "scorecard";
+const HIRE_REVIEW_WINDOW = 3600n;
+const MAX_REVIEW_WINDOW = 30n * 86400n;
+const MAX_ENDPOINT_BYTES = 256;
 
 const POLICY_SETS: Record<string, { label: string; policy: Policy }> = {
   proven: { label: "proven", policy: POLICIES.proven },
@@ -61,12 +73,26 @@ const publicClient = createPublicClient({
   batch: { multicall: { wait: 25 } },
   pollingInterval: 1000,
 });
-const ap = new AgentPassportClient({ publicClient });
+const ap = new AgentPassportClient({ publicClient }); // JobEscrow v2: every new job, the hire flow
+
+// Two escrows share one AgentPassport. v2 (current) replaced v1 after the security review; v1 holds
+// the first jobs (the ones in the demo video), all closed. Job ids restart at 1 on each escrow, so a
+// job is always keyed and labelled by escrow: "v2 #1", "v1 #5".
+type Ver = "v1" | "v2";
+interface Escrow { ver: Ver; label: string; d: Deployment; client: AgentPassportClient }
+const ESCROWS: Record<Ver, Escrow> = {
+  v2: { ver: "v2", label: "JobEscrow v2", d: D, client: ap },
+  v1: { ver: "v1", label: "JobEscrow v1", d: D_V1, client: new AgentPassportClient({ publicClient, deployment: D_V1 }) },
+};
+const ESCROW_LIST = [ESCROWS.v2, ESCROWS.v1];
+const escrowAt = (a?: string | null) => ESCROW_LIST.find((e) => !!a && e.d.jobEscrow.toLowerCase() === a.toLowerCase());
+const jobKey = (ver: Ver, id: bigint | string) => `${ver}:${id}`;
 
 // ───────────────────────────── state ─────────────────────────────
 
 interface TxInfo {
   openTx?: Hex;
+  acceptTx?: Hex;
   deliverTx?: Hex;
   closeTx?: Hex;
   closedBy?: string;
@@ -74,8 +100,9 @@ interface TxInfo {
   deliverableHash?: Hex;
   openedAt?: number; // unix seconds
 }
-type Row = Job & { jobId: bigint };
-interface RecentJob { jobId: string; openTx?: Hex; deliverTx?: Hex; closeTx?: Hex; releasedBy?: string; deliverableURI?: string; openedAt?: string }
+/** acceptedAt: unix seconds, 0n = not accepted yet, null on v1 (no acceptance step). */
+type Row = Job & { jobId: bigint; ver: Ver; acceptedAt: bigint | null };
+interface RecentJob { jobId: string; escrow?: string; hirer_id?: string; amount?: string; openTx?: Hex; deliverTx?: Hex; closeTx?: Hex; releasedBy?: string; deliverableURI?: string; openedAt?: string }
 type Snapshot = IndexSnapshot & { recentJobs?: RecentJob[] };
 
 let snapshot: Snapshot | null = null;
@@ -108,9 +135,26 @@ const when = (unix?: number) => {
   if (s < 172800) return `${Math.round(s / 3600)} h ago`;
   return new Date(unix * 1000).toISOString().slice(0, 10);
 };
+const utc = (unix: bigint | number) => new Date(Number(unix) * 1000).toISOString().slice(11, 16) + " UTC";
+// JobEscrow custom errors, decoded from the simulation, in words.
+const REVERTS: Record<string, string> = {
+  DeadlinePassed: "The job's deadline has passed: the agent can no longer accept or deliver it.",
+  DeadlineNotPassed: "The agent accepted this job, so a refund opens only after its deadline.",
+  AlreadyAccepted: "The agent has already accepted this job.",
+  BadReviewWindow: "The review window is too long (JobEscrow v2 allows at most 30 days).",
+  EndpointTooLong: "The endpoint label is too long (JobEscrow v2 allows at most 256 bytes).",
+  BadDeadline: "The deadline must be in the future.",
+  InvalidStatus: "The job is no longer in a state that allows this (it was delivered or closed meanwhile).",
+  NotHirer: "Only the wallet that opened the job can do this.",
+  ReviewWindowClosed: "The review window has closed.",
+  ZeroAmount: "The amount must be above zero.",
+};
 const errText = (e: unknown) => {
   const x = e as { shortMessage?: string; message?: string; code?: number; cause?: { code?: number } };
   if (x?.code === 4001 || x?.cause?.code === 4001) return "Request rejected in the wallet.";
+  const rev = e instanceof BaseError ? (e.walk((c) => c instanceof ContractFunctionRevertedError) as ContractFunctionRevertedError | null) : null;
+  const name = rev?.data?.errorName;
+  if (name) return REVERTS[name] ?? `JobEscrow reverted: ${name}`;
   return (x?.shortMessage ?? x?.message ?? String(e)).split("\n")[0]!;
 };
 function toast(msg: string) {
@@ -119,8 +163,8 @@ function toast(msg: string) {
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 3500);
 }
-const info = (id: bigint | string) => {
-  const k = String(id);
+const info = (ver: Ver, id: bigint | string) => {
+  const k = jobKey(ver, id);
   if (!txInfo.has(k)) txInfo.set(k, {});
   return txInfo.get(k)!;
 };
@@ -136,19 +180,24 @@ async function tick() {
     pill.classList.add("live");
     pill.querySelector("span")!.textContent = `Monad testnet · block ${b.toLocaleString("en-US")}`;
     let changed = false;
-    if (tailed === 0n) tailed = b - BACKFILL_BLOCKS;
-    // Public RPCs cap eth_getLogs at 100 blocks; walk forward at most 6 windows per tick.
+    if (tailed === 0n) tailed = b - BACKFILL_BLOCKS > D.fromBlock ? b - BACKFILL_BLOCKS : D.fromBlock - 1n;
+    // Public RPCs cap eth_getLogs at 100 blocks; walk forward at most 6 windows per tick. One
+    // eth_getLogs covers both escrows (address list); each log's address says which one it is.
     for (let i = 0; i < 6 && tailed < b; i++) {
       const from = tailed + 1n;
       const to = from + 99n < b ? from + 99n : b;
-      const events = await publicClient.getContractEvents({ address: D.jobEscrow, abi: jobEscrowAbi, fromBlock: from, toBlock: to });
+      const events = await publicClient.getContractEvents({ address: [D.jobEscrow, D_V1.jobEscrow], abi: jobEscrowAbi, fromBlock: from, toBlock: to });
       for (const ev of events) {
+        const e = escrowAt(ev.address);
+        if (!e) continue;
         changed = true;
         const a = ev.args as Record<string, unknown>;
-        const j = info(a.jobId as bigint);
+        const j = info(e.ver, a.jobId as bigint);
         if (ev.eventName === "JobOpened") {
           j.openTx = ev.transactionHash;
           if (!j.openedAt) j.openedAt = Math.floor(Date.now() / 1000) - Math.round(Number(b - ev.blockNumber) * 0.4);
+        } else if (ev.eventName === "JobAccepted") {
+          j.acceptTx = ev.transactionHash;
         } else if (ev.eventName === "JobDelivered") {
           j.deliverTx = ev.transactionHash;
           j.deliverableURI = a.deliverableURI as string;
@@ -169,56 +218,95 @@ async function tick() {
 
 // ───────────────────────────── jobs ─────────────────────────────
 
+async function readJob(e: Escrow, jobId: bigint): Promise<Row> {
+  const [job, acceptedAt] = await Promise.all([e.client.getJob(jobId), e.ver === "v1" ? Promise.resolve(null) : e.client.acceptedAt(jobId)]);
+  return { ...job, jobId, ver: e.ver, acceptedAt };
+}
+
 async function refreshJobs(force = false) {
-  const count = await ap.jobCount();
-  const ids: bigint[] = [];
-  for (let i = 1n; i <= count; i++) {
-    const cur = jobs.get(String(i));
-    // Released / Refunded / Disputed are final; everything else is re-read.
-    if (force || !cur || cur.status < JobStatus.Released) ids.push(i);
+  // Both jobCounts and every getJob / acceptedAt below go out as one Multicall3 eth_call each round.
+  const counts = await Promise.all(ESCROW_LIST.map(async (e) => [e, await e.client.jobCount()] as const));
+  const reads: Array<Promise<Row>> = [];
+  for (const [e, count] of counts) {
+    for (let i = 1n; i <= count; i++) {
+      const cur = jobs.get(jobKey(e.ver, i));
+      // Released / Refunded / Disputed are final; everything else is re-read.
+      if (force || !cur || cur.status < JobStatus.Released) reads.push(readJob(e, i));
+    }
   }
-  const rows = await Promise.all(ids.map(async (jobId) => ({ jobId, ...(await ap.getJob(jobId)) })));
-  for (const r of rows) jobs.set(String(r.jobId), r);
+  for (const r of await Promise.all(reads)) jobs.set(jobKey(r.ver, r.jobId), r);
+  mergeSnapshot();
   renderJobs();
   renderKpis();
   renderWalletJobs();
 }
 
+/** Status pill plus, for an open v2 job, whether the agent has taken it. */
+function statusCell(j: Row, now: bigint) {
+  if (j.ver === "v2" && j.status === JobStatus.Refunded && j.acceptedAt === 0n) {
+    return `<span class="status s-Cancelled" title="Cancelled by the hirer before the agent accepted it: no passport entry">Cancelled</span>`;
+  }
+  const name = jobStatusName(j.status);
+  const pill = `<span class="status s-${name}">${name}</span>`;
+  if (j.status !== JobStatus.Open || j.acceptedAt === null) return pill;
+  const late = j.deadline < now;
+  const sub = j.acceptedAt
+    ? late
+      ? `<span class="bad small" title="accepted ${utc(j.acceptedAt)}, deadline ${utc(j.deadline)}">accepted · past deadline</span>`
+      : `<span class="ok small" title="accepted ${utc(j.acceptedAt)}; the agent has until ${utc(j.deadline)} to deliver">accepted</span>`
+    : late
+      ? `<span class="muted small" title="deadline ${utc(j.deadline)}">never accepted</span>`
+      : `<span class="warn small" title="the hirer can cancel until the agent accepts">waiting for agent</span>`;
+  return `${pill} ${sub}`;
+}
+
 function renderJobs() {
-  const rows = [...jobs.values()].sort((a, b) => Number(b.jobId - a.jobId));
+  const byId = (a: Row, b: Row) => Number(b.jobId - a.jobId);
+  const all = [...jobs.values()];
+  const v2 = all.filter((j) => j.ver === "v2").sort(byId);
+  const v1 = all.filter((j) => j.ver === "v1").sort(byId);
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const row = (j: Row) => {
+    const k = jobKey(j.ver, j.jobId);
+    const e = ESCROWS[j.ver];
+    const t = txInfo.get(k) ?? {};
+    const name = jobStatusName(j.status);
+    const fresh = !firstJobsRender && !seenJobs.has(`${k}:${j.status}:${j.acceptedAt ? 1 : 0}`);
+    seenJobs.add(`${k}:${j.status}:${j.acceptedAt ? 1 : 0}`);
+    const closeLabel = j.ver === "v2" && j.status === JobStatus.Refunded && j.acceptedAt === 0n ? "cancel" : name.toLowerCase();
+    const txs = [t.openTx && txLink(t.openTx, "open"), t.acceptTx && txLink(t.acceptTx, "accept"), t.deliverTx && txLink(t.deliverTx, "deliver"), t.closeTx && txLink(t.closeTx, closeLabel)].filter(Boolean).join("");
+    const verifier = j.verifier !== "0x0000000000000000000000000000000000000000" ? ` <span class="muted small" title="delegated release verifier ${j.verifier}">+verifier</span>` : "";
+    const deliverable = isHttp(t.deliverableURI)
+      ? `<a href="${esc(t.deliverableURI)}" target="_blank" rel="noopener">deliverable.json</a>`
+      : j.status === JobStatus.Delivered || j.status === JobStatus.Released
+        ? `<button class="btn small" data-find="${k}">locate</button>`
+        : j.status === JobStatus.Open
+          ? `<span class="muted">pending</span>`
+          : `<span class="muted">—</span>`;
+    const ref = `<a class="jobref ${j.ver}" href="${EXPLORER}/address/${e.d.jobEscrow}" target="_blank" rel="noopener" title="${e.label} ${e.d.jobEscrow}">${j.ver} #${j.jobId}</a>`;
+    return `<tr class="${fresh ? "fresh" : ""}" data-job="${k}"><td>${ref}</td><td><a href="#agent=${j.agentId}">${j.agentId}</a></td><td>${addrLink(j.hirer)}</td><td>${usdc(j.amount)}</td>` +
+      `<td>${statusCell(j, now)}${verifier}</td><td>${when(t.openedAt)}</td><td class="txs">${txs || '<span class="muted">—</span>'}</td><td>${deliverable}</td></tr>`;
+  };
+  const sep = (html: string) => `<tr class="sep"><td colspan="8">${html}</td></tr>`;
   const tb = $("jobs").querySelector("tbody")!;
-  tb.innerHTML = rows
-    .map((j) => {
-      const k = String(j.jobId);
-      const t = txInfo.get(k) ?? {};
-      const name = jobStatusName(j.status);
-      const fresh = !firstJobsRender && !seenJobs.has(`${k}:${j.status}`);
-      seenJobs.add(`${k}:${j.status}`);
-      const txs = [t.openTx && txLink(t.openTx, "open"), t.deliverTx && txLink(t.deliverTx, "deliver"), t.closeTx && txLink(t.closeTx, name.toLowerCase())].filter(Boolean).join("");
-      const verifier = j.verifier !== "0x0000000000000000000000000000000000000000" ? ` <span class="muted small" title="delegated release verifier ${j.verifier}">+verifier</span>` : "";
-      const deliverable = isHttp(t.deliverableURI)
-        ? `<a href="${esc(t.deliverableURI)}" target="_blank" rel="noopener">deliverable.json</a>`
-        : j.status === JobStatus.Delivered || j.status === JobStatus.Released
-          ? `<button class="btn small" data-find="${k}">locate</button>`
-          : j.status === JobStatus.Open
-            ? `<span class="muted">pending</span>`
-            : `<span class="muted">—</span>`;
-      return `<tr class="${fresh ? "fresh" : ""}"><td>#${k}</td><td><a href="#agent=${j.agentId}">${j.agentId}</a></td><td>${addrLink(j.hirer)}</td><td>${usdc(j.amount)}</td>` +
-        `<td><span class="status s-${name}">${name}</span>${verifier}</td><td>${when(t.openedAt)}</td><td class="txs">${txs || '<span class="muted">—</span>'}</td><td>${deliverable}</td></tr>`;
-    })
-    .join("") || `<tr><td colspan="8" class="muted">No jobs yet.</td></tr>`;
+  tb.innerHTML =
+    (v2.length ? v2.map(row).join("") : `<tr><td colspan="8" class="muted">No jobs on JobEscrow v2 yet. Hire agentfromzero above to open the first one.</td></tr>`) +
+    (v1.length
+      ? sep(`<b>JobEscrow v1</b> · history: the jobs from the demo video, all closed. v2 replaced it after a <a href="${SECURITY_DOC}" target="_blank" rel="noopener">security review</a>; the passports keep these stamps.`) + v1.map(row).join("")
+      : "");
   firstJobsRender = false;
-  $("jobs-meta").textContent = `${rows.length} jobs · JobEscrow state over RPC, tailing events to block ${tailed.toLocaleString("en-US")}`;
+  $("jobs-meta").textContent = `${v2.length} on v2 + ${v1.length} on v1 (history) · JobEscrow state over RPC, tailing both escrows to block ${tailed.toLocaleString("en-US")}`;
 }
 
 $("jobs").addEventListener("click", async (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-find]");
   if (!btn) return;
+  const [ver, id] = btn.dataset.find!.split(":") as [Ver, string];
   btn.disabled = true;
   btn.textContent = "searching…";
   try {
-    const d = await ap.getDelivery(BigInt(btn.dataset.find!));
-    if (d) Object.assign(info(d.jobId), { deliverTx: d.transactionHash, deliverableURI: d.deliverableURI, deliverableHash: d.deliverableHash });
+    const d = await ESCROWS[ver].client.getDelivery(BigInt(id));
+    if (d) Object.assign(info(ver, d.jobId), { deliverTx: d.transactionHash, deliverableURI: d.deliverableURI, deliverableHash: d.deliverableHash });
     renderJobs();
   } catch (err) {
     toast(errText(err));
@@ -234,7 +322,7 @@ function renderKpis() {
   const agentsWithJobs = new Set(all.map((j) => String(j.agentId))).size;
   const p = snapshot?.protocol as Record<string, number> | undefined;
   const kpis: Array<[string, string]> = [
-    [String(all.length), "jobs opened in escrow (live)"],
+    [String(all.length), "jobs opened in escrow (v1 + v2, live)"],
     [String(settled.length), "settled and stamped (live)"],
     [usdc(volume), "USDC paid to agents (live)"],
     [String(agentsWithJobs), "agents hired so far"],
@@ -252,15 +340,7 @@ async function loadSnapshot() {
   for (const url of SNAPSHOT_URLS) {
     try {
       snapshot = (await fetchIndexSnapshot(url)) as Snapshot;
-      for (const r of snapshot.recentJobs ?? []) {
-        const j = info(r.jobId);
-        j.openTx ??= r.openTx;
-        j.deliverTx ??= r.deliverTx;
-        j.closeTx ??= r.closeTx;
-        j.closedBy ??= r.releasedBy;
-        j.deliverableURI ??= r.deliverableURI;
-        if (r.openedAt && !j.openedAt) j.openedAt = Math.floor(Date.parse(r.openedAt) / 1000);
-      }
+      mergeSnapshot();
       renderIndex(url);
       return;
     } catch {
@@ -268,6 +348,27 @@ async function loadSnapshot() {
     }
   }
   $("index").querySelector("tbody")!.innerHTML = `<tr><td colspan="7" class="muted">The index snapshot could not be loaded. Live chain reads above still work.</td></tr>`;
+}
+
+/**
+ * Copies tx hashes from the index snapshot's recent jobs onto the matching live rows. The index
+ * predates v2, so a record without an `escrow` field is a v1 job; a record is only used if its
+ * hirer and amount match what the chain says for that escrow + id (ids collide across escrows).
+ */
+function mergeSnapshot() {
+  for (const r of snapshot?.recentJobs ?? []) {
+    const ver = r.escrow ? escrowAt(r.escrow)?.ver : "v1";
+    const row = ver && jobs.get(jobKey(ver, r.jobId));
+    if (!ver || !row) continue;
+    if ((r.hirer_id && r.hirer_id.toLowerCase() !== row.hirer.toLowerCase()) || (r.amount && r.amount !== String(row.amount))) continue;
+    const j = info(ver, r.jobId);
+    j.openTx ??= r.openTx ?? undefined;
+    j.deliverTx ??= r.deliverTx ?? undefined;
+    j.closeTx ??= r.closeTx ?? undefined;
+    j.closedBy ??= r.releasedBy ?? undefined;
+    j.deliverableURI ??= r.deliverableURI ?? undefined;
+    if (r.openedAt && !j.openedAt) j.openedAt = Math.floor(Date.parse(r.openedAt) / 1000);
+  }
 }
 
 function renderIndex(source: string) {
@@ -485,12 +586,25 @@ function renderWallet() {
 function renderWalletJobs() {
   const box = document.getElementById("my-jobs");
   if (!box || !wallet || hireBusy) return;
-  const mine = [...jobs.values()].filter((j) => j.hirer.toLowerCase() === wallet!.address.toLowerCase() && (j.status === JobStatus.Open || j.status === JobStatus.Delivered));
+  // Only v2 can have unfinished jobs (every v1 job is closed), so resume / cancel / refund act on v2.
+  const mine = [...jobs.values()]
+    .filter((j) => j.ver === "v2" && j.hirer.toLowerCase() === wallet!.address.toLowerCase() && (j.status === JobStatus.Open || j.status === JobStatus.Delivered))
+    .sort((a, b) => Number(b.jobId - a.jobId));
   const now = BigInt(Math.floor(Date.now() / 1000));
+  const follow = (j: Row) => `<button class="btn small" data-resume="${j.jobId}">follow</button>`;
+  const actions = (j: Row) => {
+    if (j.status === JobStatus.Delivered) return `delivered <button class="btn small" data-resume="${j.jobId}">verify + release</button>`;
+    const late = j.deadline < now;
+    // Unaccepted: the hirer may cancel at any time (no passport entry).
+    if (!j.acceptedAt) return `${late ? "never accepted" : "waiting for the agent to accept"} ${late ? "" : follow(j)}<button class="btn small" data-refund="${j.jobId}">cancel</button>`;
+    // Accepted: the agent has until the deadline; after it, the refund is recorded on its passport.
+    return late
+      ? `accepted, not delivered by the deadline <button class="btn small" data-refund="${j.jobId}">refund</button>`
+      : `accepted ${follow(j)}<span class="muted">refund possible after ${utc(j.deadline)}</span>`;
+  };
   box.innerHTML = mine.length
     ? `<p class="small muted" style="margin:12px 0 6px">Your unfinished jobs:</p>` +
-      mine.map((j) => `<div class="wallet-line small">#${j.jobId} · ${usdc(j.amount)} USDC · ${jobStatusName(j.status)} ` +
-        (j.status === JobStatus.Delivered ? `<button class="btn small" data-resume="${j.jobId}">verify + release</button>` : j.deadline < now ? `<button class="btn small" data-refund="${j.jobId}">refund</button>` : `<button class="btn small" data-resume="${j.jobId}">follow</button>`) + `</div>`).join("")
+      mine.map((j) => `<div class="wallet-line small">v2 #${j.jobId} · ${usdc(j.amount)} USDC · ${actions(j)}</div>`).join("")
     : "";
 }
 
@@ -498,8 +612,8 @@ $("wallet").addEventListener("click", (e) => {
   const t = e.target as HTMLElement;
   const resume = t.closest<HTMLButtonElement>("button[data-resume]");
   const refund = t.closest<HTMLButtonElement>("button[data-refund]");
-  if (resume) void followJob(BigInt(resume.dataset.resume!));
-  if (refund) void refundJob(BigInt(refund.dataset.refund!));
+  if (resume) void followJob(BigInt(resume.dataset.resume!)); // v2 job id
+  if (refund) void refundJob(BigInt(refund.dataset.refund!), refund); // v2 job id
 });
 $("connect").addEventListener("click", () => (wallet ? void refreshBalances() : void connect()));
 
@@ -560,14 +674,16 @@ async function hire() {
   t0.v = Date.now();
   try {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + Number($<HTMLSelectElement>("deadline").value));
-    const params = ap.toOpenParams({ agentId: AGENT, amount, specHash: preset.specHash as Hex, endpoint: "scorecard", deadline, reviewWindow: 3600n });
+    if (HIRE_REVIEW_WINDOW > MAX_REVIEW_WINDOW || new TextEncoder().encode(HIRE_ENDPOINT).length > MAX_ENDPOINT_BYTES) throw new Error("The hire parameters exceed JobEscrow v2's limits.");
+    // ap is bound to MONAD_TESTNET, i.e. JobEscrow v2.
+    const params = ap.toOpenParams({ agentId: AGENT, amount, specHash: preset.specHash as Hex, endpoint: HIRE_ENDPOINT, deadline, reviewWindow: HIRE_REVIEW_WINDOW });
     log(`Hiring agentfromzero (ERC-8004 agent ${AGENT}) for <b>${usdc(amount)} USDC</b>: "${esc(preset.title)}", specHash <code>${esc(short(preset.specHash, 6))}</code>`, "big");
     if (wallet.allowance < amount) await send("USDC approve", { address: D.usdc, abi: usdcAbi, functionName: "approve", args: [D.jobEscrow, amount] });
     const opened = await send("JobEscrow.open", { address: D.jobEscrow, abi: jobEscrowAbi, functionName: "open", args: [params] });
     const [ev] = parseEventLogs({ abi: jobEscrowAbi, logs: opened.logs as never, eventName: "JobOpened" });
     const jobId = ev!.args.jobId;
-    Object.assign(info(jobId), { openTx: opened.hash, openedAt: Math.floor(Date.now() / 1000) });
-    log(`<b>Job #${jobId} is open.</b> ${usdc(amount)} USDC is locked in JobEscrow until the agent delivers.`, "big");
+    Object.assign(info("v2", jobId), { openTx: opened.hash, openedAt: Math.floor(Date.now() / 1000) });
+    log(`<b>Job #${jobId} is open</b> on JobEscrow v2 (v2 #${jobId}). ${usdc(amount)} USDC is locked until the agent delivers. Until agentfromzero accepts the job you can cancel it at any time.`, "big");
     setStep("open", "done");
     await refreshBalances();
     void refreshJobs();
@@ -580,44 +696,86 @@ async function hire() {
   }
 }
 
-/** Waits for delivery, verifies the bytes against the on-chain hash, then offers release. */
+/**
+ * Follows a JobEscrow v2 job: waits for the agent to accept it (offering the hirer a cancel until
+ * then), waits for delivery, verifies the bytes against the on-chain hash, then offers release.
+ * Only v2 jobs can still be open, so this always reads through `ap` (JobEscrow v2).
+ */
 async function followJob(jobId: bigint, fromHire = false) {
   if (!fromHire) {
+    if (hireBusy) return toast("Already following a job.");
     $("progress").innerHTML = "";
     t0.v = Date.now();
-    log(`Following job #${jobId}.`, "big");
+    log(`Following job v2 #${jobId}.`, "big");
   }
   hireBusy = true;
   setStep("wallet", "done");
   setStep("open", "done");
-  setStep("deliver", "active");
-  const waitLine = log("Waiting for agentfromzero's worker to pick up the job, run the skill and deliver…");
+  setStep("accept", "active");
   const started = Date.now();
-  let job = await ap.getJob(jobId);
-  while (job.status === JobStatus.Open) {
-    const s = Math.round((Date.now() - started) / 1000);
-    waitLine.lastElementChild!.textContent = `Waiting for agentfromzero's worker to pick up the job, run the skill and deliver… ${s}s`;
+  const secs = () => Math.round((Date.now() - started) / 1000);
+  let [job, acceptedAt] = await Promise.all([ap.getJob(jobId), ap.acceptedAt(jobId)]);
+  const isHirer = () => !!wallet && wallet.address.toLowerCase() === job.hirer.toLowerCase();
+  const reclaimButton = (label: string, note: string) => {
+    const l = log(`<button class="btn small">${esc(label)}</button> <span class="muted">${note}</span>`);
+    l.querySelector("button")!.addEventListener("click", (e) => void refundJob(jobId, e.currentTarget as HTMLButtonElement, false));
+    return l;
+  };
+  const waitLine = log("Waiting for agentfromzero's worker to accept the job…");
+  let cancelLine: HTMLElement | null = null;
+  let deliverLine: HTMLElement | null = null;
+  while (job.status === JobStatus.Open && BigInt(Math.floor(Date.now() / 1000)) <= job.deadline) {
+    if (!acceptedAt) {
+      waitLine.lastElementChild!.textContent = `Waiting for agentfromzero's worker to accept the job… ${secs()}s`;
+      if (!cancelLine && isHirer()) cancelLine = reclaimButton("Cancel the job", "Allowed until the agent accepts: the USDC comes back and the agent's passport gets no entry.");
+    } else {
+      if (!deliverLine) {
+        cancelLine?.remove();
+        cancelLine = null;
+        const t = info("v2", jobId);
+        waitLine.lastElementChild!.innerHTML = `<b>Accepted</b> by agentfromzero at ${utc(acceptedAt)}${t.acceptTx ? ` · ${txLink(t.acceptTx, "accept tx")}` : ""}. It has until ${utc(job.deadline)} to deliver; the job can no longer be cancelled, only refunded after that deadline.`;
+        setStep("accept", "done");
+        setStep("deliver", "active");
+        deliverLine = log("agentfromzero is running the skill and delivering…");
+      }
+      deliverLine.lastElementChild!.textContent = `agentfromzero is running the skill and delivering… ${secs()}s`;
+    }
     await sleep(2000);
-    job = await ap.getJob(jobId);
+    [job, acceptedAt] = await Promise.all([ap.getJob(jobId), ap.acceptedAt(jobId)]);
   }
-  if (job.status !== JobStatus.Delivered) {
-    log(`Job #${jobId} is ${jobStatusName(job.status)}.`);
-    setStep("deliver", "done");
+  cancelLine?.remove();
+  if (job.status === JobStatus.Open) {
+    // The deadline passed with no delivery: the agent can no longer act, the hirer can reclaim.
+    const accepted = !!acceptedAt;
+    log(accepted
+      ? `The deadline (${utc(job.deadline)}) passed without a delivery. The hirer can refund the job; the refund is recorded on the agent's passport.`
+      : `The deadline (${utc(job.deadline)}) passed and the agent never accepted the job. The hirer can cancel it; the agent's passport gets no entry.`);
+    if (isHirer()) reclaimButton(accepted ? "Refund" : "Cancel the job", "returns the USDC to your wallet");
     hireBusy = false;
+    renderWallet();
     return;
   }
+  if (job.status !== JobStatus.Delivered) {
+    const cancelled = job.status === JobStatus.Refunded && !acceptedAt;
+    waitLine.lastElementChild!.textContent = `Job v2 #${jobId} is ${cancelled ? "cancelled (never accepted)" : jobStatusName(job.status)}.`;
+    hireBusy = false;
+    renderWallet();
+    return;
+  }
+  setStep("accept", "done");
+  setStep("deliver", "active");
   // The live tail normally has the JobDelivered event already; otherwise locate it on chain.
-  let t = info(jobId);
+  let t = info("v2", jobId);
   for (let i = 0; i < 6 && !t.deliverableURI; i++) {
     await tick();
-    t = info(jobId);
+    t = info("v2", jobId);
     if (!t.deliverableURI) await sleep(1000);
   }
   if (!t.deliverableURI) {
     const d = await ap.getDelivery(jobId);
     if (d) Object.assign(t, { deliverTx: d.transactionHash, deliverableURI: d.deliverableURI, deliverableHash: d.deliverableHash });
   }
-  waitLine.lastElementChild!.innerHTML = `<b>Delivered</b> after ${Math.round((Date.now() - started) / 1000)}s · ${txLink(t.deliverTx, "deliver tx")} · committed hash <code>${esc(short(job.deliverableHash, 8))}</code>`;
+  (deliverLine ?? waitLine).lastElementChild!.innerHTML = `<b>Delivered</b> after ${secs()}s${deliverLine ? "" : " (accepted in the same transaction)"} · ${txLink(t.deliverTx, "deliver tx")} · committed hash <code>${esc(short(job.deliverableHash, 8))}</code>`;
   setStep("deliver", "done");
   void refreshJobs();
 
@@ -673,7 +831,7 @@ async function release(jobId: bigint, job: Job, btn: HTMLButtonElement) {
   try {
     const before = await ap.getPassport(job.agentId);
     const r = await send("JobEscrow.release", { address: D.jobEscrow, abi: jobEscrowAbi, functionName: "release", args: [jobId] });
-    info(jobId).closeTx = r.hash;
+    info("v2", jobId).closeTx = r.hash;
     const mirrored = parseEventLogs({ abi: agentPassportAbi, logs: r.logs as never, eventName: "FeedbackMirrored" })[0];
     const after = await ap.getPassport(job.agentId, r.block);
     log(`<b>Paid.</b> Passport of agent ${job.agentId}: settled jobs ${before.jobsSettled} → <b>${after.jobsSettled}</b>, volume ${usdc(before.volumeSettled)} → <b>${usdc(after.volumeSettled)} USDC</b>.` +
@@ -691,16 +849,33 @@ async function release(jobId: bigint, job: Job, btn: HTMLButtonElement) {
   }
 }
 
-async function refundJob(jobId: bigint) {
-  $("progress").innerHTML = "";
-  t0.v = Date.now();
+/**
+ * Hirer reclaims an undelivered JobEscrow v2 job. Before the agent accepts it, this is a cancel
+ * (allowed at any time, no passport entry); after acceptance only once the deadline has passed,
+ * and the refund is recorded on the agent's passport.
+ */
+async function refundJob(jobId: bigint, btn?: HTMLButtonElement, clear = true) {
+  if (btn) btn.disabled = true;
+  if (clear) {
+    $("progress").innerHTML = "";
+    t0.v = Date.now();
+  }
   try {
-    await send("JobEscrow.refund", { address: D.jobEscrow, abi: jobEscrowAbi, functionName: "refund", args: [jobId] });
-    log(`Job #${jobId} refunded to your wallet.`, "big");
+    const [job, acceptedAt] = await Promise.all([ap.getJob(jobId), ap.acceptedAt(jobId)]);
+    const accepted = !!acceptedAt;
+    if (accepted && BigInt(Math.floor(Date.now() / 1000)) <= job.deadline) {
+      throw new Error(`The agent accepted job v2 #${jobId} at ${utc(acceptedAt!)}, so a refund opens only after its deadline (${utc(job.deadline)}).`);
+    }
+    const r = await send(accepted ? "JobEscrow.refund" : "JobEscrow.refund (cancel)", { address: D.jobEscrow, abi: jobEscrowAbi, functionName: "refund", args: [jobId] });
+    info("v2", jobId).closeTx = r.hash;
+    log(accepted
+      ? `Job v2 #${jobId} refunded to your wallet. The refund is recorded on agent ${job.agentId}'s passport.`
+      : `Job v2 #${jobId} cancelled: the USDC is back in your wallet, and agent ${job.agentId}'s passport has no entry for it.`, "big");
     await refreshJobs();
     await refreshBalances();
   } catch (e) {
     log(`<span class="bad">${esc(errText(e))}</span>`);
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -711,7 +886,9 @@ $("hire").addEventListener("click", () => void hire());
 function renderContracts() {
   const rows: Array<[string, string]> = [
     ["AgentPassport", addrLink(D.agentPassport, D.agentPassport)],
-    ["JobEscrow", addrLink(D.jobEscrow, D.jobEscrow)],
+    ["JobEscrow v2 (current)", `${addrLink(D.jobEscrow, D.jobEscrow)} <span class="muted small">· every new job and the hire flow · from block ${D.fromBlock.toLocaleString("en-US")}</span>`],
+    ["JobEscrow v1 (history)", `${addrLink(D_V1.jobEscrow, D_V1.jobEscrow)} <span class="muted small">· jobs v1 #1–#5 from the demo video, all closed · from block ${D_V1.fromBlock.toLocaleString("en-US")}</span>`],
+    ["Security review", `<a href="${SECURITY_DOC}" target="_blank" rel="noopener">docs/SECURITY.md</a> <span class="muted small">· why v2 replaced v1: the agent accepts a job before working, no delivery after the deadline, a hirer cancels an unaccepted job at any time (no passport mark) and refunds an accepted one only after the deadline</span>`],
     ["ERC-8004 IdentityRegistry", addrLink(D.identityRegistry, D.identityRegistry)],
     ["ERC-8004 ReputationRegistry", addrLink(D.reputationRegistry, D.reputationRegistry)],
     ["Circle USDC (settlement token)", addrLink(D.usdc, D.usdc)],
