@@ -1,0 +1,29 @@
+{
+  "name": "@agentpassport/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "agentfromzero's hire-flow worker: watches JobEscrow, does the job, publishes a content-addressed deliverable and calls deliver().",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "once": "node src/main.ts --once",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentfromzero/agentpassport-sdk": "file:../sdk",
+    "viem": "^2.56.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@x402/core": "^2.27.0",
+    "@x402/evm": "^2.27.0",
+    "@x402/fetch": "^2.27.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  },
+  "license": "MIT"
+}
