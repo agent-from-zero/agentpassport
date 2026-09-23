@@ -8,3 +8,14 @@ export { POLICIES, USDC_DECIMALS, ZERO_ADDRESS, evaluatePolicy, formatUsdc, hash
 export { JobStatus, jobStatusName } from "./types.js";
 export type { HireInput, Job, OpenAuthorization, OpenParams, Passport, Policy, PolicyCheck, PolicyInput, Scorecard } from "./types.js";
 export { agentPassportAbi, identityRegistryAbi, jobEscrowAbi, reputationRegistryAbi, usdcAbi } from "./abis.js";
+export {
+  INDEX_AGENT_QUERY,
+  INDEX_POLICY_FIELDS,
+  INDEX_SNAPSHOT_SCHEMA,
+  evaluateIndexPolicy,
+  fetchIndexSnapshot,
+  fromRawAgent,
+  queryIndexedAgent,
+  toIndexPolicy,
+} from "./trust-index.js";
+export type { CounterpartyIntel, IndexCheck, IndexPolicy, IndexSnapshot, IndexedAgent, IndexedHirer, RawAgent } from "./trust-index.js";

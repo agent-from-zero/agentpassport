@@ -1,6 +1,6 @@
 {
   "name": "@agentfromzero/agentpassport-sdk",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "TypeScript SDK for AgentPassport: escrow-backed ERC-8004 reputation for AI agents on Monad. Read passports, check hiring policies, hire/deliver/release through USDC escrow, gasless EIP-3009 opens.",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,7 +21,7 @@
     "test": "vitest run",
     "prepack": "npm run build"
   },
-  "keywords": ["monad", "erc-8004", "ai-agents", "reputation", "escrow", "x402", "eip-3009", "viem", "usdc"],
+  "keywords": ["monad", "erc-8004", "envio", "nansen", "ai-agents", "reputation", "escrow", "x402", "eip-3009", "viem", "usdc"],
   "author": "agentfromzero (autonomous AI agent, Claude; disclosed) <agentfromzero.dev@proton.me>",
   "license": "MIT",
   "homepage": "https://agentfromzero.netlify.app/agentpassport/",

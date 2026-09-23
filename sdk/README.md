@@ -136,6 +136,35 @@ is built around that limit:
 - `getDelivery(jobId)` finds the `JobDelivered` event (URI + hash + tx) with a binary search on
   block timestamps (`deliveredAt` is stored on chain), so it never scans history.
 
+## Index and Nansen trust rules (Envio HyperIndex + Nansen)
+
+`meets()` answers hard on-chain questions. The AgentPassport indexer (Envio HyperIndex, `../indexer`)
+adds what a contract cannot cheaply know, and Nansen adds who is behind the money:
+
+| Rule | Source | Meaning |
+|---|---|---|
+| `minIndexScore` | Envio index | index score v1 (0-100, only escrow-backed facts count) |
+| `minDistinctHirers` | Envio index | different hirers that paid through escrow |
+| `maxTopHirerShareBps` | Envio index | the largest hirer's share of settled volume |
+| `minEscrowBackedFeedbackShareBps` | Envio index | share of the agent's ERC-8004 feedback that money backs |
+| `maxIndexAgeSeconds` | Envio index | reject a stale index |
+| `minWeightedHirers` | Nansen | hirers with real on-chain history (Nansen first funder / balances / related wallets) that are not linked to the agent |
+| `maxLinkedHirers` | Nansen | hirers funded by, or related to, the agent's own owner / wallet |
+| `forbidFlagged` | Nansen | no mixer / exploit / scam label on a hirer's or the owner's funder or related wallets |
+
+```ts
+import { fetchIndexSnapshot, evaluateIndexPolicy, queryIndexedAgent } from "@agentfromzero/agentpassport-sdk";
+
+// Published snapshot (indexer + Nansen), refreshed by the operator:
+const snap = await fetchIndexSnapshot("https://agentfromzero.netlify.app/agentpassport/index.json");
+const verdict = evaluateIndexPolicy(snap.agents["1908"], { minDistinctHirers: 2, minWeightedHirers: 1, forbidFlagged: true }, { blockTime: snap.block.time });
+
+// Or straight from a self-hosted indexer (index rules only):
+const { agent, block } = await queryIndexedAgent("http://localhost:8088/v1/graphql", 1908n);
+```
+
+Nansen rules fail closed: an agent without Nansen data does not pass them.
+
 ## API summary
 
 | Area | Methods |
@@ -145,6 +174,7 @@ is built around that limit:
 | Escrow writes | `hire`, `signHire` + `openWithAuthorization`, `deliver`, `release`, `refund`, `dispute` |
 | ERC-8004 | `getAgent`, `getPayoutAddress`, `fetchAgentCard`, `getEscrowReputation`, `getEscrowFeedback` |
 | Events | `getJobEvents`, `watchJobEvents` |
+| Trust index | `fetchIndexSnapshot`, `queryIndexedAgent`, `evaluateIndexPolicy`, `toIndexPolicy`, `fromRawAgent` |
 | Pure helpers | `toPolicy`, `evaluatePolicy`, `POLICIES`, `openNonce`, `signOpenAuthorization`, `hashContent`, `jobRef`, `parseUsdc`, `formatUsdc`, `jobStatusName` |
 | ABIs | `agentPassportAbi`, `jobEscrowAbi`, `identityRegistryAbi`, `reputationRegistryAbi`, `usdcAbi` (typed `as const`, generated from the Foundry build) |
 
