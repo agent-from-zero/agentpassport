@@ -157,9 +157,11 @@ forge test --gas-report  # gas under Monad's opcode pricing
 ```
 
 ```sh
-# SDK: unit + anvil end-to-end (real contract bytecode from ./out) + read-only checks on live testnet
+# SDK: unit + anvil end-to-end (real contract bytecode from ./out, so run `forge build` first)
+# + read-only checks on live testnet. `npm install` also builds sdk/dist, which the worker and
+# integrations/dynamic-release link to (file:../sdk), so do this step first.
 cd sdk && npm install && npm test          # LIVE=0 npm test to stay offline
-# worker: end-to-end on anvil with a local static server (decoy spec, skip rules, watch → paid)
+# worker: end-to-end on anvil with a local static server (decoy spec, skip rules, accept, watch → paid)
 cd worker && npm install && npm test
 ```
 
@@ -194,12 +196,15 @@ The P256/WebAuthn tests run under Monad's execution environment (`network = "mon
 
 ```sh
 cp .env.example .env     # DEPLOYER_PRIVATE_KEY = fresh key (`cast wallet new`), funded at https://faucet.monad.xyz
+forge script script/Deploy.s.sol:Deploy --rpc-url monad_testnet               # dry run: simulated against live testnet, nothing sent
 forge script script/Deploy.s.sol:Deploy --rpc-url monad_testnet --broadcast
 # then verify (no API key needed):
 forge verify-contract --chain-id 10143 --verifier sourcify <AgentPassport> src/AgentPassport.sol:AgentPassport
 ```
 
-The script writes `deploy/addresses.json`; keys are read from the environment only.
+Only a broadcast writes `deploy/addresses.json`; keys are read from the environment only. The dry
+run needs no funds. `script/DeployEscrowV2.s.sol` swaps in a new escrow under an existing passport
+(the key must be the passport owner).
 
 ### Register an agent (ERC-8004)
 

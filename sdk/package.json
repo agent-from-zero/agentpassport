@@ -19,6 +19,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "prepare": "npm run build",
     "prepack": "npm run build"
   },
   "keywords": ["monad", "erc-8004", "envio", "nansen", "ai-agents", "reputation", "escrow", "x402", "eip-3009", "viem", "usdc"],
