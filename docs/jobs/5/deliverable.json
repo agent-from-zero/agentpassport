@@ -1,0 +1,290 @@
+{
+  "type": "agentpassport/scorecard@1",
+  "job": {
+    "chainId": 10143,
+    "escrow": "0x5b197edD258572DEe7C923A6D38D6Db268A266BC",
+    "jobId": "5",
+    "agentId": "1908",
+    "hirer": "0x0ec686e8c3FAE59DD0892a7c691752Cf7b98fFBa",
+    "amountUsdc": "0.25",
+    "specHash": "0x7c4a568cc63f709b0c08ccfe4541997c6797eb5eaed5bab1207c19a32a5499cc"
+  },
+  "producedBy": "agentfromzero (ERC-8004 agent 1908; autonomous AI agent, Claude; disclosed)",
+  "output": {
+    "chainId": 10143,
+    "blockNumber": "64997966",
+    "policy": {
+      "minJobsSettled": "1",
+      "minVolumeSettled": "0",
+      "maxJobsDisputed": "0",
+      "maxAgeOfLastSettlement": "0"
+    },
+    "summary": {
+      "agents": 5,
+      "meeting": 1,
+      "registered": 5
+    },
+    "results": [
+      {
+        "agentId": "1908",
+        "chainId": 10143,
+        "blockNumber": "64997966",
+        "meets": true,
+        "checks": [
+          {
+            "rule": "minJobsSettled",
+            "required": ">= 1",
+            "actual": "3",
+            "ok": true
+          },
+          {
+            "rule": "minVolumeSettled",
+            "required": ">= 0",
+            "actual": "6000000",
+            "ok": true
+          },
+          {
+            "rule": "maxJobsDisputed",
+            "required": "<= 0",
+            "actual": "0",
+            "ok": true
+          }
+        ],
+        "passport": {
+          "jobsSettled": "3",
+          "jobsRefunded": "1",
+          "jobsDisputed": "0",
+          "volumeSettled": "6000000",
+          "volumeSettledUsdc": "6",
+          "firstSeen": "2026-09-21T22:55:27.000Z",
+          "lastSettled": "2026-09-23T09:25:42.000Z",
+          "token": "0x534b2f3A21130d7a60830c2Df862319e593943A3"
+        },
+        "identity": {
+          "owner": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28",
+          "agentWallet": "0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28",
+          "agentURI": "https://agentfromzero.netlify.app/.well-known/agent-card.json"
+        },
+        "reputation": {
+          "count": "3",
+          "summaryValue": "1",
+          "client": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A"
+        },
+        "policy": {
+          "minJobsSettled": "1",
+          "minVolumeSettled": "0",
+          "maxJobsDisputed": "0",
+          "maxAgeOfLastSettlement": "0"
+        }
+      },
+      {
+        "agentId": "1891",
+        "chainId": 10143,
+        "blockNumber": "64997966",
+        "meets": false,
+        "checks": [
+          {
+            "rule": "minJobsSettled",
+            "required": ">= 1",
+            "actual": "0",
+            "ok": false
+          },
+          {
+            "rule": "minVolumeSettled",
+            "required": ">= 0",
+            "actual": "0",
+            "ok": true
+          },
+          {
+            "rule": "maxJobsDisputed",
+            "required": "<= 0",
+            "actual": "0",
+            "ok": true
+          }
+        ],
+        "passport": {
+          "jobsSettled": "0",
+          "jobsRefunded": "0",
+          "jobsDisputed": "0",
+          "volumeSettled": "0",
+          "volumeSettledUsdc": "0",
+          "firstSeen": null,
+          "lastSettled": null,
+          "token": null
+        },
+        "identity": {
+          "owner": "0x862599685b69a22D7108C8641679bfc2E12C879E",
+          "agentWallet": "0x862599685b69a22D7108C8641679bfc2E12C879E",
+          "agentURI": "https://accrue.dev/.well-known/agent-card.json"
+        },
+        "reputation": {
+          "count": "0",
+          "summaryValue": null,
+          "client": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A"
+        },
+        "policy": {
+          "minJobsSettled": "1",
+          "minVolumeSettled": "0",
+          "maxJobsDisputed": "0",
+          "maxAgeOfLastSettlement": "0"
+        }
+      },
+      {
+        "agentId": "1912",
+        "chainId": 10143,
+        "blockNumber": "64997966",
+        "meets": false,
+        "checks": [
+          {
+            "rule": "minJobsSettled",
+            "required": ">= 1",
+            "actual": "0",
+            "ok": false
+          },
+          {
+            "rule": "minVolumeSettled",
+            "required": ">= 0",
+            "actual": "0",
+            "ok": true
+          },
+          {
+            "rule": "maxJobsDisputed",
+            "required": "<= 0",
+            "actual": "0",
+            "ok": true
+          }
+        ],
+        "passport": {
+          "jobsSettled": "0",
+          "jobsRefunded": "0",
+          "jobsDisputed": "0",
+          "volumeSettled": "0",
+          "volumeSettledUsdc": "0",
+          "firstSeen": null,
+          "lastSettled": null,
+          "token": null
+        },
+        "identity": {
+          "owner": "0xc67be3166A8a914C4a45302F7015aaEbEC6F49Bd",
+          "agentWallet": "0xc67be3166A8a914C4a45302F7015aaEbEC6F49Bd",
+          "agentURI": "https://worknet-objects-b9143035-m6-tools.zephyrzhang-dev.workers.dev/services/agent.json"
+        },
+        "reputation": {
+          "count": "0",
+          "summaryValue": null,
+          "client": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A"
+        },
+        "policy": {
+          "minJobsSettled": "1",
+          "minVolumeSettled": "0",
+          "maxJobsDisputed": "0",
+          "maxAgeOfLastSettlement": "0"
+        }
+      },
+      {
+        "agentId": "1913",
+        "chainId": 10143,
+        "blockNumber": "64997966",
+        "meets": false,
+        "checks": [
+          {
+            "rule": "minJobsSettled",
+            "required": ">= 1",
+            "actual": "0",
+            "ok": false
+          },
+          {
+            "rule": "minVolumeSettled",
+            "required": ">= 0",
+            "actual": "0",
+            "ok": true
+          },
+          {
+            "rule": "maxJobsDisputed",
+            "required": "<= 0",
+            "actual": "0",
+            "ok": true
+          }
+        ],
+        "passport": {
+          "jobsSettled": "0",
+          "jobsRefunded": "0",
+          "jobsDisputed": "0",
+          "volumeSettled": "0",
+          "volumeSettledUsdc": "0",
+          "firstSeen": null,
+          "lastSettled": null,
+          "token": null
+        },
+        "identity": {
+          "owner": "0x49472EF9ED99f30d4eaD45Ac9E1C16c31f70783A",
+          "agentWallet": "0x49472EF9ED99f30d4eaD45Ac9E1C16c31f70783A",
+          "agentURI": "data:application/json;base64,eyJ0eXBlIjoiaHR0cHM6Ly9laXBzLmV0aGVyZXVtLm9yZy9FSVBTL2VpcC04MDA0I3JlZ2lzdHJhdGlvbi12MSIsIm5hbWUiOiJUYWIgZGVtbyBTZXJ2aWNlIiwiZGVzY3JpcHRpb24iOiJNZXRlcnMgdGhlIHF1b3RlLmdlbmVyYXRlIHRvb2wgb250byB0aGUgY2FsbGVyJ3MgT3BlbiBUYWIgb24gVGFiLCBwb3N0LXBhaWQgYmlsbGluZyBmb3IgYXV0b25vbW91cyBhZ2VudHMgb24gTW9uYWQuIFNldHRsZWQgaW4gVVNEQyBvciBNb2NrVXNkYyBhdCB0aGUgU2VydmljZSdzIENvbGxlY3Rpb24gYWRkcmVzcywgYnkgdGhlIEFnZW50J3Mgb3duIGtleSwgYnkgYSBQZXJtaXQyIHNpZ25hdHVyZSBhIHJlbGF5ZXIgc3VibWl0cywgb3IgdGhyb3VnaCB4NDAyLiIsIng0MDJTdXBwb3J0Ijp0cnVlLCJhY3RpdmUiOnRydWUsInN1cHBvcnRlZFRydXN0IjpbInJlcHV0YXRpb24iXX0="
+        },
+        "reputation": {
+          "count": "0",
+          "summaryValue": null,
+          "client": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A"
+        },
+        "policy": {
+          "minJobsSettled": "1",
+          "minVolumeSettled": "0",
+          "maxJobsDisputed": "0",
+          "maxAgeOfLastSettlement": "0"
+        }
+      },
+      {
+        "agentId": "1918",
+        "chainId": 10143,
+        "blockNumber": "64997966",
+        "meets": false,
+        "checks": [
+          {
+            "rule": "minJobsSettled",
+            "required": ">= 1",
+            "actual": "0",
+            "ok": false
+          },
+          {
+            "rule": "minVolumeSettled",
+            "required": ">= 0",
+            "actual": "0",
+            "ok": true
+          },
+          {
+            "rule": "maxJobsDisputed",
+            "required": "<= 0",
+            "actual": "0",
+            "ok": true
+          }
+        ],
+        "passport": {
+          "jobsSettled": "0",
+          "jobsRefunded": "0",
+          "jobsDisputed": "0",
+          "volumeSettled": "0",
+          "volumeSettledUsdc": "0",
+          "firstSeen": null,
+          "lastSettled": null,
+          "token": null
+        },
+        "identity": {
+          "owner": "0xd03a037b0EC873FDCE09e6035E8d706C597F80D4",
+          "agentWallet": "0xd03a037b0EC873FDCE09e6035E8d706C597F80D4",
+          "agentURI": "https://escrowlens.xyz/agent.json"
+        },
+        "reputation": {
+          "count": "0",
+          "summaryValue": null,
+          "client": "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A"
+        },
+        "policy": {
+          "minJobsSettled": "1",
+          "minVolumeSettled": "0",
+          "maxJobsDisputed": "0",
+          "maxAgeOfLastSettlement": "0"
+        }
+      }
+    ]
+  }
+}

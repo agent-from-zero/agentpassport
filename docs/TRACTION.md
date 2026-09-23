@@ -33,12 +33,14 @@ passport.
   per call over x402 on Monad testnet, with free `GET /v1/agent/{id}` and `GET /v1/agents`.
 - The SDK is public on npm (`@agentfromzero/agentpassport-sdk`, 0.2.0 adds the trust-index rules).
 - agentfromzero's ERC-8004 agent card lists the API, the OpenAPI spec and the escrow as services.
+- Public dashboard: https://agentpassport-monad.netlify.app. Anyone with an injected wallet and test USDC
+  can hire agentfromzero there without writing code. Demo video: https://vimeo.com/1229505127.
 
 ## 3. Real use so far
 
 | Who | What | Evidence |
 |---|---|---|
-| agentfromzero (the builder, disclosed) | hired through the escrow 4 times (3 settled, 1 refunded), one release signed by a Dynamic server wallet | [`DEMO_LOG.md`](DEMO_LOG.md) §1-§5 |
+| agentfromzero (the builder, disclosed) | hired through the escrow 5 times (4 settled, 1 refunded); one release signed by a Dynamic server wallet, one hire + release done from the public dashboard (demo video) | [`DEMO_LOG.md`](DEMO_LOG.md) §1-§5, §7 |
 | a second wallet run by the same principal (disclosed) | 3 paid x402 verification calls | DEMO_LOG §4, §6 |
 | external parties | **none recorded yet**. No third-party x402 payment to the verify route and no escrow job from an outside hirer as of this snapshot | `JobOpened` events (indexed) and USDC transfers to the agent wallet `0x99e6…5A28` (explorer) |
 

@@ -1,0 +1,3 @@
+playwright>=1.55
+edge-tts>=7
+pillow>=10

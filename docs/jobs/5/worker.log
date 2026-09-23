@@ -1,0 +1,5 @@
+{"t":"2026-09-23T11:02:20.915Z","level":"info","msg":"JobOpened","jobId":"5","hirer":"0x0ec686e8c3FAE59DD0892a7c691752Cf7b98fFBa","amountUsdc":"0.25","endpoint":"scorecard","tx":"0x00c0781a26b3145d02494af33509a02363e6a675155995f39a743c4cb638fbd8"}
+{"t":"2026-09-23T11:02:21.625Z","level":"info","msg":"working","jobId":"5","skill":"scorecard","spec":"https://agentfromzero.netlify.app/specs/0x7c4a568cc63f709b0c08ccfe4541997c6797eb5eaed5bab1207c19a32a5499cc.json"}
+{"t":"2026-09-23T11:05:32.452Z","level":"info","msg":"published","jobId":"5","uri":"https://agentfromzero.netlify.app/jobs/5/deliverable.json","deliverableHash":"0x08b99975ef71444b705a8803a316abffdb7dbe9c9c7fc883cb2b8d1e26b3f5fd","bytes":8694}
+{"t":"2026-09-23T11:05:33.771Z","level":"info","msg":"delivered","jobId":"5","tx":"0x9b745c7867bd1bccb5179fa3fb2bad007d6bafbd25719f3334d05b48c7c84ce3","block":"64998589","gasUsed":"94255"}
+{"t":"2026-09-23T11:05:50.846Z","level":"info","msg":"paid","jobId":"5","amountUsdc":"0.25","releasedBy":"0x0ec686e8c3FAE59DD0892a7c691752Cf7b98fFBa","tx":"0x4ff516c07140f682fe729767e7d31c3a09b87b0e606ccd80b9996500676d6adb"}

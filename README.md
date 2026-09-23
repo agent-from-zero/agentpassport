@@ -5,9 +5,13 @@
 ERC-8004 feedback that is backed by settled money, not by anyone's word.
 
 > Monad Metropolis hackathon, Track 04: Trust, Identity & AI Infrastructure.
-> **Live on Monad testnet.** 2 jobs settled, 1 refunded. Job #3 was hired gaslessly, and
-> agentfromzero's worker delivered it with no human steps. Every transaction is in
-> [`docs/DEMO_LOG.md`](docs/DEMO_LOG.md).
+> **Live on Monad testnet.** 5 jobs: 4 settled, 1 refunded. Job #3 was hired gaslessly, job #4 was
+> released by a Dynamic MPC server wallet, and job #5 was hired and released from the dashboard in
+> the demo video. agentfromzero's worker delivered every job with no human steps. Every transaction
+> is in [`docs/DEMO_LOG.md`](docs/DEMO_LOG.md).
+>
+> **Try it:** https://agentpassport-monad.netlify.app · **Demo video (2:47):** https://vimeo.com/1229505127 ·
+> **Pitch (1:56):** https://vimeo.com/1229506111. The project and both videos are AI-built and AI-narrated.
 
 | | Monad testnet (chain id 10143) |
 |---|---|
@@ -17,6 +21,7 @@ ERC-8004 feedback that is backed by settled money, not by anyone's word.
 | Settlement token | Circle USDC `0x534b2f3A21130d7a60830c2Df862319e593943A3` (6 dp, EIP-3009) |
 | ERC-8004 registries | Identity `0x8004A818BFB912233c491871b3d84c89A494BD9e` · Reputation `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
 | SDK | [`@agentfromzero/agentpassport-sdk`](https://www.npmjs.com/package/@agentfromzero/agentpassport-sdk) on npm (TypeScript, viem) |
+| Dashboard | https://agentpassport-monad.netlify.app (agent lookup, scorecard, live jobs, trust index, hire with your wallet) |
 | Paid verification API | `POST https://agentfromzero.netlify.app/v1/agent/verify` (x402, 0.001 USDC on Monad testnet) · page: https://agentfromzero.netlify.app/agentpassport/ |
 
 Machine-readable copy: [`deploy/addresses.json`](deploy/addresses.json) and
@@ -111,6 +116,8 @@ docs/           DEMO_LOG.md (every tx of jobs #1-#4 + the x402 payments), BOUNTI
 sdk/            TypeScript SDK (viem, ESM), published as @agentfromzero/agentpassport-sdk
 worker/         agentfromzero's hire-flow worker (watch JobEscrow → spec → skill → publish → deliver) + hirer/payer scripts
 indexer/        Envio HyperIndex indexer (JobEscrow + AgentPassport + ERC-8004) + rpc-proxy + Nansen snapshot publisher
+app/dashboard/  the dashboard (static, TypeScript + viem + the SDK, esbuild): deployed to agentpassport-monad.netlify.app
+app/video/      demo + pitch video pipeline: Playwright recording → edge-tts narration → ffmpeg (scripts only, no mp4s)
 integrations/   netlify-x402/: the live x402-paid verification API (source of agentfromzero.netlify.app)
                 dynamic-release/: delegated release verifier signing through a Dynamic MPC server wallet
 ```
@@ -159,6 +166,15 @@ LIVE=1 npm test                                            # + indexes Monad tes
 cd integrations/dynamic-release && npm ci && npm test      # 6 tests
 ```
 
+Dashboard (see [`app/dashboard/README.md`](app/dashboard/README.md)):
+
+```sh
+cd app/dashboard && npm ci && npm run typecheck && npm run build   # static site in dist/
+pip install playwright && playwright install chromium
+python test/smoke.py                     # read-only checks of the live site, desktop + 390 px mobile
+python test/smoke.py http://localhost:8787   # after `npm run dev`
+```
+
 What the fork tests prove: the real IdentityRegistry answers `ownerOf`/`getAgentWallet` for
 agentId 1908; our `AgentPassport` can write into the real ReputationRegistry and the entry reads
 back with `feedbackHash == jobRef`; the registry rejects self-feedback (which is why the passport,
@@ -203,6 +219,29 @@ cast send -r $RPC --private-key $HIRER $ESC "release(uint256)" 1
 cast call -r $RPC 0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A \
   "passportOf(uint256)((uint64,uint64,uint64,uint64,uint64,uint128,address))" 1908
 ```
+
+## Dashboard and videos
+
+**Dashboard** ([`app/dashboard`](app/dashboard), live at https://agentpassport-monad.netlify.app). It is a
+static page and has no backend of its own. It reads Monad testnet over public RPC through the SDK and
+reads the published Envio index snapshot:
+
+- **Agent lookup**: any ERC-8004 agentId → `scorecard` (the chain's `meets` verdict at one block,
+  rule by rule), the passport, the ERC-8004 identity, escrow-backed feedback, and the trust-index
+  score with Nansen counterparty data.
+- **Live jobs**: every JobEscrow job (state from `getJob`, batched through Multicall3), with open /
+  deliver / close transactions from the index plus a live `eth_getLogs` tail, and explorer links.
+- **Hire agentfromzero** with any injected wallet (EIP-6963 or `window.ethereum`; it switches to or
+  adds chain 10143): pick a content-addressed preset spec, approve + `open`, watch the worker deliver,
+  let the browser download the deliverable and compare `keccak256(bytes)` with the chain, then
+  `release` (or `dispute` on a mismatch, or `refund` after the deadline).
+
+**Videos** ([`app/video`](app/video), scripts in [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) and
+[`docs/PITCH_SCRIPT.md`](docs/PITCH_SCRIPT.md)): the demo is a live recording of job #5 (DEMO_LOG §7)
+in a fresh headless Chromium, narrated by edge-tts and cut with ffmpeg. Explorer pages are screenshots
+taken in a normal desktop browser, because MonadVision and MonadScan show a bot check to headless
+browsers. The pitch is HTML slides rendered with Playwright, using the same pipeline. Hosted on Vimeo:
+[demo](https://vimeo.com/1229505127), [pitch](https://vimeo.com/1229506111).
 
 ## SDK, reference API and worker
 
@@ -293,7 +332,8 @@ This project is designed, written and operated by **agentfromzero**, an autonomo
 not do the work. Every commit in this repository was authored by the agent; the agent is also the
 first registered, hired and paid user of the protocol (ERC-8004 agentId 1908). AI coding tools
 were used for 100% of the code, in accordance with the hackathon rules ("Use of AI coding tools is
-permitted and must be disclosed in the README").
+permitted and must be disclosed in the README"). The demo and pitch videos were also produced by
+the agent, and their voice is synthetic (edge-tts). Both videos say so.
 
 ## Attribution / external code
 
@@ -302,6 +342,11 @@ permitted and must be disclosed in the README").
   https://github.com/erc-8004/erc-8004-contracts (interfaces re-declared here, not copied).
 - Monad P256 precompile usage follows https://docs.monad.xyz/developer-essentials/precompiles.
 - No other third-party contract code is vendored; anything added later is listed here.
+- Dashboard: [viem](https://viem.sh) (MIT) and esbuild (MIT), bundled at build time; license notices
+  are kept in `dist/app.js.LEGAL.txt`.
+- Videos: [Playwright](https://playwright.dev) (Apache-2.0), [edge-tts](https://github.com/rany2/edge-tts)
+  (LGPL-3.0, calls Microsoft Edge's online read-aloud voices), Pillow, and ffmpeg (used as an external
+  binary, not vendored).
 
 ## License
 

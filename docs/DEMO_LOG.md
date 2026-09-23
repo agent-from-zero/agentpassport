@@ -1,4 +1,4 @@
-# Demo log: every AgentPassport job on Monad testnet (jobs #1 and #2 on 2026-09-21, jobs #3 and #4 on 2026-09-23)
+# Demo log: every AgentPassport job on Monad testnet (jobs #1 and #2 on 2026-09-21, jobs #3, #4 and #5 on 2026-09-23)
 
 Everything below happened on **Monad testnet (chain id 10143)** with real transactions from two
 keys: the **hirer** (a fresh EOA funded by the Monad and Circle faucets) and the **agent**
@@ -216,11 +216,37 @@ facilitator settled the 0.001 USDC in
 [`0x45343c7f…0990`](https://testnet.monadvision.com/tx/0x45343c7f083c4d606ce626bcefd0dc074dcb3b311ed2b9111e929e2263480990).
 Full response: [`traction/verify-paid-index-policy.json`](traction/verify-paid-index-policy.json).
 
+## 7. Job #5: hired from the dashboard, recorded for the demo video (2026-09-23)
+
+The demo video is this run. [`app/video/record_demo.py`](../app/video/record_demo.py) drove the live
+dashboard (https://agentpassport-monad.netlify.app) in a fresh headless Chromium with an injected
+EIP-1193 test wallet holding the hirer key (the same disclosed operator wallet as jobs #1-#4).
+Every step below was a click in the dashboard, apart from the worker, which ran on its own.
+
+| step | who | tx |
+|---|---|---|
+| USDC approve (0.25) | hirer, from the dashboard | [`0x7f865834…149c`](https://testnet.monadvision.com/tx/0x7f8658340587621dee2054d96638c44141093eef4a4639fce9c1945d5a08149c) |
+| `open` job #5 (0.25 USDC, spec `0x7c4a568c…99cc`, preset "Scorecard of five named agents") | hirer, from the dashboard | [`0x00c0781a…fbd8`](https://testnet.monadvision.com/tx/0x00c0781a26b3145d02494af33509a02363e6a675155995f39a743c4cb638fbd8) |
+| `deliver` (hash `0x08b99975…f5fd`, [`/jobs/5/deliverable.json`](https://agentfromzero.netlify.app/jobs/5/deliverable.json)) | agentfromzero's worker | [`0x9b745c78…4ce3`](https://testnet.monadvision.com/tx/0x9b745c7867bd1bccb5179fa3fb2bad007d6bafbd25719f3334d05b48c7c84ce3) (block 64998589) |
+| `release` after the browser matched keccak256(bytes) to the chain | hirer, from the dashboard | [`0x4ff516c0…6adb`](https://testnet.monadvision.com/tx/0x4ff516c07140f682fe729767e7d31c3a09b87b0e606ccd80b9996500676d6adb) (block 64998643) |
+
+- The spec is one of the dashboard's content-addressed presets (served at `/specs/<hash>.json` on
+  both sites). The worker fetched it from `agentfromzero.netlify.app/specs`, checked the hash and
+  ran `scorecard`: 1 of 5 agents (1908) meets the policy at block 64997966.
+- The worker took 3 min 13 s from `JobOpened` to `deliver`. Almost all of it was the Netlify deploy
+  that publishes the deliverable (11:02:22 → 11:05:32 UTC). Log lines: [`jobs/5/worker.log`](jobs/5/worker.log).
+- The release logs show `JobReleased` (escrow), `Attested` (passport), `NewFeedback` in the ERC-8004
+  ReputationRegistry (agentId 1908, client = AgentPassport, value 1.00, tags `agentpassport`/`settled`,
+  endpoint `scorecard`, feedbackIndex 4) and `FeedbackMirrored(ok = true)`.
+- Checked with cast afterwards: `passportOf(1908)` = 4 settled / 1 refunded / 0 disputed,
+  6.25 USDC; job #5 status 3 (Released). The saved deliverable
+  [`jobs/5/deliverable.json`](jobs/5/deliverable.json) hashes to `0x08b99975…f5fd`.
+
 ## Reproduce
 
 ```sh
 export RPC=https://testnet-rpc.monad.xyz ESC=0x5b197edD258572DEe7C923A6D38D6Db268A266BC PP=0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A
-cast call -r $RPC $ESC "jobCount()(uint256)"                                          # 4
+cast call -r $RPC $ESC "jobCount()(uint256)"                                          # 5
 cast call -r $RPC $ESC "getJob(uint256)((uint256,address,address,address,uint128,uint64,uint64,uint64,uint8,bytes32,bytes32))" 1
 cast call -r $RPC $PP  "passportOf(uint256)((uint64,uint64,uint64,uint64,uint64,uint128,address))" 1908
 cast call -r $RPC 0x8004B663056A597Dffe9eCcC1965A193B7388713 "readFeedback(uint256,address,uint64)(int128,uint8,string,string,bool)" 1908 $PP 1
