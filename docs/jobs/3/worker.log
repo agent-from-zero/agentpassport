@@ -1,0 +1,21 @@
+{"t":"2026-09-23T05:39:20.331Z","level":"info","msg":"worker up","agentId":"1908","key":"0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28","escrow":"0x5b197edD258572DEe7C923A6D38D6Db268A266BC","skills":["scorecard"]}
+{"t":"2026-09-23T05:39:22.088Z","level":"info","msg":"catch-up","openJobs":[]}
+{"t":"2026-09-23T05:39:23.547Z","level":"info","msg":"watching","fromBlock":"64933984","escrow":"0x5b197edD258572DEe7C923A6D38D6Db268A266BC"}
+{"t":"2026-09-23T05:39:41.541Z","level":"info","msg":"JobOpened","jobId":"3","hirer":"0x0ec686e8c3FAE59DD0892a7c691752Cf7b98fFBa","amountUsdc":"0.5","endpoint":"scorecard","tx":"0x791458e6c16df46ff38b7eef93626ab7f7a51a63d86ccb9becb69a5cc9901c3e"}
+{"t":"2026-09-23T05:39:42.145Z","level":"info","msg":"working","jobId":"3","skill":"scorecard","spec":"https://agentfromzero.netlify.app/specs/0xc2e65cf426400459be587fcf9e8a26f1af6762638cabcab239ae6379367a8f6f.json"}
+{"t":"2026-09-23T05:39:43.473Z","level":"error","msg":"job failed","jobId":"3","reason":"RPC Request failed."}
+{"t":"2026-09-23T05:44:38.683Z","level":"info","msg":"worker up","agentId":"1908","key":"0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28","escrow":"0x5b197edD258572DEe7C923A6D38D6Db268A266BC","skills":["scorecard"]}
+{"t":"2026-09-23T05:44:38.896Z","level":"info","msg":"catch-up","openJobs":["3"]}
+{"t":"2026-09-23T05:44:39.382Z","level":"info","msg":"working","jobId":"3","skill":"scorecard","spec":"https://agentfromzero.netlify.app/specs/0xc2e65cf426400459be587fcf9e8a26f1af6762638cabcab239ae6379367a8f6f.json"}
+{"t":"2026-09-23T05:44:40.742Z","level":"info","msg":"deploy","cmd":"cd …\node\node_modules.bin\netlify.cmd\" deploy --prod --site b06e4f3e-9369-4d6a-841b-60c2447cf164 --dir public --functions functions"}
+{"t":"2026-09-23T05:44:40.801Z","level":"error","msg":"job failed","jobId":"3","reason":"Command failed: cd /d C:Users\teachoperatorservice-netlify && \"C:Users\teachoperator\tools"}
+{"t":"2026-09-23T05:44:40.923Z","level":"info","msg":"watching","fromBlock":"64934273","escrow":"0x5b197edD258572DEe7C923A6D38D6Db268A266BC"}
+{"t":"2026-09-23T05:45:27.414Z","level":"info","msg":"worker up","agentId":"1908","key":"0x99e6C3faE6a1EbaeD0bfFFFeB2B6443faC595A28","escrow":"0x5b197edD258572DEe7C923A6D38D6Db268A266BC","skills":["scorecard"]}
+{"t":"2026-09-23T05:45:27.639Z","level":"info","msg":"catch-up","openJobs":["3"]}
+{"t":"2026-09-23T05:45:28.503Z","level":"info","msg":"working","jobId":"3","skill":"scorecard","spec":"https://agentfromzero.netlify.app/specs/0xc2e65cf426400459be587fcf9e8a26f1af6762638cabcab239ae6379367a8f6f.json"}
+{"t":"2026-09-23T05:45:30.814Z","level":"info","msg":"deploy","cmd":"node …"}
+{"t":"2026-09-23T05:46:24.563Z","level":"info","msg":"published","jobId":"3","uri":"https://agentfromzero.netlify.app/jobs/3/deliverable.json","deliverableHash":"0x06722a9d56cbd9611cc6e53e27628ad5837dc6c8bd9d07739b1a3772d1784c1a","bytes":8012}
+{"t":"2026-09-23T05:46:25.813Z","level":"info","msg":"delivered","jobId":"3","tx":"0xc1986752dc3c1539eb36b0ce7e1f1e78e0953f2d2d687d316504e0fdf00ae2ae","block":"64935381","gasUsed":"94255"}
+{"t":"2026-09-23T05:46:25.906Z","level":"info","msg":"watching","fromBlock":"64935163","escrow":"0x5b197edD258572DEe7C923A6D38D6Db268A266BC"}
+{"t":"2026-09-23T05:46:49.588Z","level":"info","msg":"paid","jobId":"3","amountUsdc":"0.5","releasedBy":"0x0ec686e8c3FAE59DD0892a7c691752Cf7b98fFBa","tx":"0x9143321747b94ad5e3b61df84a6b652cb93a690469715aaeb0d50da8f3c189a6"}
+{"t":"2026-09-23T05:47:26.163Z","level":"info","msg":"catch-up","openJobs":[]}

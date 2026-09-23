@@ -1,4 +1,4 @@
-# Demo log — job #1 settled on Monad testnet (2026-09-21)
+# Demo log: every AgentPassport job on Monad testnet (jobs #1 and #2 on 2026-09-21, job #3 on 2026-09-23)
 
 Everything below happened on **Monad testnet (chain id 10143)** with real transactions from two
 keys: the **hirer** (a fresh EOA funded by the Monad and Circle faucets) and the **agent**
@@ -111,11 +111,68 @@ covered by the Foundry suite (`test/JobEscrow.t.sol`) and the fork tests; it was
 agentfromzero's live passport on purpose — a dispute is a permanent negative mark, and there was
 no real dispute.
 
+## 3. Job #3 — hired gaslessly, delivered by the worker (2026-09-23)
+
+This job went through the full production loop with no hand-typed transactions. The hirer used the
+SDK (`worker/scripts/hirer.ts`). The agent side was `worker/` in watch mode, publishing to
+agentfromzero's Netlify site.
+
+| | |
+|---|---|
+| Spec | `docs/jobs/3/spec.json`, served content-addressed at https://agentfromzero.netlify.app/specs/0xc2e65cf426400459be587fcf9e8a26f1af6762638cabcab239ae6379367a8f6f.json. `specHash = 0xc2e65cf426400459be587fcf9e8a26f1af6762638cabcab239ae6379367a8f6f` |
+| Skill | `scorecard` for agents 1908, 1, 100, 1907 under `{minJobsSettled 1, maxJobsDisputed 0}` |
+| Deliverable | https://agentfromzero.netlify.app/jobs/3/deliverable.json (`docs/jobs/3/deliverable.json`). `deliverableHash = 0x06722a9d56cbd9611cc6e53e27628ad5837dc6c8bd9d07739b1a3772d1784c1a` |
+| Price | 0.5 USDC, deadline = open + 24 h, review window 3600 s, endpoint `scorecard` |
+
+| # | Who | Action | Tx | Block |
+|---|---|---|---|---|
+| 1 | hirer | Signs an EIP-3009 `ReceiveWithAuthorization` for 0.5 USDC to JobEscrow. The nonce is `openNonce(params, 0, validBefore)` = `0x2afd0abb…c391`. **No transaction and 0 MON spent.** | (off-chain) | — |
+| 2 | relayer (agent key) | `openWithAuthorization(params, auth)` → **jobId 3**, with the hirer recorded as hirer | [`0x791458e6c16df46ff38b7eef93626ab7f7a51a63d86ccb9becb69a5cc9901c3e`](https://testnet.monadvision.com/tx/0x791458e6c16df46ff38b7eef93626ab7f7a51a63d86ccb9becb69a5cc9901c3e) | 64934042 |
+| 3 | worker | Sees `JobOpened`, fetches the spec (keccak checked), runs `scorecard` at block 64935192, deploys the deliverable, checks the served bytes, then calls `deliver(3, 0x06722a9d…4c1a, uri)` | [`0xc1986752dc3c1539eb36b0ce7e1f1e78e0953f2d2d687d316504e0fdf00ae2ae`](https://testnet.monadvision.com/tx/0xc1986752dc3c1539eb36b0ce7e1f1e78e0953f2d2d687d316504e0fdf00ae2ae) | 64935381 |
+| 4 | hirer | `verifyDelivery(3)`: finds the `JobDelivered` event by timestamp, downloads the URI, and gets keccak256 == on-chain hash ✔. Then `release(3)`. | [`0x9143321747b94ad5e3b61df84a6b652cb93a690469715aaeb0d50da8f3c189a6`](https://testnet.monadvision.com/tx/0x9143321747b94ad5e3b61df84a6b652cb93a690469715aaeb0d50da8f3c189a6) | 64935457 |
+| 5 | worker | Sees `JobReleased` and logs `paid` (`docs/jobs/3/worker.log`) | — | — |
+
+The release emitted `JobReleased` → `Attested(jobRef 0xad79dd34…4fd7)` →
+**`NewFeedback(1908, client AgentPassport, index 2, 1.00, "agentpassport", "settled", endpoint "scorecard", feedbackHash 0xad79dd340fcff580c7d9f84e7839a898e636dba9fa58bc159a362faf350d4fd7)`**
+→ `FeedbackMirrored(ok = true)` → `USDC.Transfer(JobEscrow → agent, 500000)`. `feedbackHash`
+equals `keccak256(abi.encode(JobEscrow, 3))`.
+
+```
+after 4  getJob(3).status = 3 (Released), deliveredAt = 1790142385
+         passportOf(1908) = (jobsSettled 2, jobsRefunded 1, jobsDisputed 0, firstSeen 1790031327,
+                             lastSettled 1790142408, volumeSettled 5500000, token USDC)
+         getLastIndex(1908, AgentPassport) = 2;  readFeedback(1908, AgentPassport, 2) = (100, 2, "agentpassport", "settled", false)
+         USDC: agent 5.501000, hirer 14.499000   (the extra 0.001 is the x402 call below)
+```
+
+The report itself shows the escrow-backed filter at work. Agent 1 has ERC-8004 feedback from two
+other clients, but its escrow-backed count is 0 and it does not meet the policy. Only 1908 does
+(`summary: 4 agents, 1 meeting, 4 registered`).
+
+`docs/jobs/3/worker.log` is the worker's complete JSON-lines log, including two earlier attempts
+that failed before sending any transaction. The first hit the public RPC's 15 requests/s limit:
+scorecard reads now go through one Multicall3 call (SDK 0.1.1). The second was a shell-escaping
+bug in the deploy command. The periodic sweep exists so a failure like this is retried on its own.
+
+## 4. Agent pays agent over x402 (2026-09-23)
+
+`POST https://agentfromzero.netlify.app/v1/agent/verify {"agentId":"1908","policy":{"minJobsSettled":"1","maxJobsDisputed":"0"}}`
+answers `402` with `PAYMENT-REQUIRED`: x402 v2, scheme `exact`, network `eip155:10143`, 1000 units
+of Circle USDC, `payTo` agentfromzero's agentWallet. `worker/scripts/verify-paid.ts` paid it from
+the hirer key with `@x402/fetch`, signing one EIP-3009 authorization. The Monad facilitator
+(`x402-facilitator.molandak.org`) settled it on chain in
+[`0xf483ff02db3bdb152c6e17610d8b97e5e5ff414c42cdfb3ee9f2b3b10062e515`](https://testnet.monadvision.com/tx/0xf483ff02db3bdb152c6e17610d8b97e5e5ff414c42cdfb3ee9f2b3b10062e515)
+(block 64933000, sender = the facilitator). The response was `200` with the scorecard
+(`meets: true`). Balances: hirer 15.000000 → 14.999000 USDC, agent 5.000000 → 5.001000 USDC.
+A second paid call after job #3 settled (and after the API moved to SDK 0.1.1) returned 2 settled
+jobs and 2 escrow-backed ERC-8004 entries averaging 1.00. The facilitator settled it in
+[`0x4d46541c86345cf589343c6b1910053eb72334ef81e0472971a628b56168c50a`](https://testnet.monadvision.com/tx/0x4d46541c86345cf589343c6b1910053eb72334ef81e0472971a628b56168c50a) (block 64936748).
+
 ## Reproduce
 
 ```sh
 export RPC=https://testnet-rpc.monad.xyz ESC=0x5b197edD258572DEe7C923A6D38D6Db268A266BC PP=0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A
-cast call -r $RPC $ESC "jobCount()(uint256)"                                          # 2
+cast call -r $RPC $ESC "jobCount()(uint256)"                                          # 3
 cast call -r $RPC $ESC "getJob(uint256)((uint256,address,address,address,uint128,uint64,uint64,uint64,uint8,bytes32,bytes32))" 1
 cast call -r $RPC $PP  "passportOf(uint256)((uint64,uint64,uint64,uint64,uint64,uint128,address))" 1908
 cast call -r $RPC 0x8004B663056A597Dffe9eCcC1965A193B7388713 "readFeedback(uint256,address,uint64)(int128,uint8,string,string,bool)" 1908 $PP 1

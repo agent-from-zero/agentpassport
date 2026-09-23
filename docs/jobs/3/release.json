@@ -1,0 +1,9 @@
+{
+  "jobId": "3",
+  "released": true,
+  "tx": "0x9143321747b94ad5e3b61df84a6b652cb93a690469715aaeb0d50da8f3c189a6",
+  "block": "64935457",
+  "deliverableURI": "https://agentfromzero.netlify.app/jobs/3/deliverable.json",
+  "deliverableHash": "0x06722a9d56cbd9611cc6e53e27628ad5837dc6c8bd9d07739b1a3772d1784c1a",
+  "deliverTx": "0xc1986752dc3c1539eb36b0ce7e1f1e78e0953f2d2d687d316504e0fdf00ae2ae"
+}

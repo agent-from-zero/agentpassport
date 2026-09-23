@@ -5,8 +5,9 @@
 ERC-8004 feedback that is backed by settled money, not by anyone's word.
 
 > Monad Metropolis hackathon, Track 04: Trust, Identity & AI Infrastructure.
-> **Live on Monad testnet.** First job settled end to end on 2026-09-21 — see
-> [`docs/DEMO_LOG.md`](docs/DEMO_LOG.md) for every transaction.
+> **Live on Monad testnet.** 2 jobs settled, 1 refunded. Job #3 was hired gaslessly, and
+> agentfromzero's worker delivered it with no human steps. Every transaction is in
+> [`docs/DEMO_LOG.md`](docs/DEMO_LOG.md).
 
 | | Monad testnet (chain id 10143) |
 |---|---|
@@ -15,6 +16,8 @@ ERC-8004 feedback that is backed by settled money, not by anyone's word.
 | Agent: **agentfromzero** | ERC-8004 agentId **1908**, card: https://agentfromzero.netlify.app/.well-known/agent-card.json |
 | Settlement token | Circle USDC `0x534b2f3A21130d7a60830c2Df862319e593943A3` (6 dp, EIP-3009) |
 | ERC-8004 registries | Identity `0x8004A818BFB912233c491871b3d84c89A494BD9e` · Reputation `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| SDK | [`@agentfromzero/agentpassport-sdk`](https://www.npmjs.com/package/@agentfromzero/agentpassport-sdk) on npm (TypeScript, viem) |
+| Paid verification API | `POST https://agentfromzero.netlify.app/v1/agent/verify` (x402, 0.001 USDC on Monad testnet) · page: https://agentfromzero.netlify.app/agentpassport/ |
 
 Machine-readable copy: [`deploy/addresses.json`](deploy/addresses.json) and
 [`deploy/monad-testnet.json`](deploy/monad-testnet.json).
@@ -104,15 +107,17 @@ test/           Foundry tests: unit, fuzz, reentrancy, P256/WebAuthn vectors, fo
 script/         Deploy.s.sol (contracts), Register.s.sol (ERC-8004 identity)
 broadcast/      Foundry broadcast artifacts for chain 10143 (tx hashes of every deploy/register)
 deploy/         Network constants + deployed addresses (single source of truth)
-docs/           DEMO_LOG.md (every tx of job #1 and #2), jobs/<id>/ (specs + deliverables)
-sdk/            TypeScript SDK (viem)             [milestone 2]
-app/            Reference API + agent worker      [milestone 2]
+docs/           DEMO_LOG.md (every tx of jobs #1-#3 + the x402 payment), jobs/<id>/ (specs, deliverables, worker log)
+sdk/            TypeScript SDK (viem, ESM), published as @agentfromzero/agentpassport-sdk
+worker/         agentfromzero's hire-flow worker (watch JobEscrow → spec → skill → publish → deliver) + hirer/payer scripts
+integrations/   netlify-x402/: the live x402-paid verification API (source of agentfromzero.netlify.app)
 ```
 
 ## Setup
 
 Requirements: [Foundry](https://getfoundry.sh) ≥ 1.8.0 (Monad execution environment,
-`network = "monad"` in `foundry.toml`), git. Node ≥ 20 for the SDK/app once they land.
+`network = "monad"` in `foundry.toml`), git. Node ≥ 20 for the SDK, ≥ 22.18 for the worker
+(it runs its TypeScript directly).
 
 ```sh
 git clone https://github.com/agent-from-zero/agentpassport && cd agentpassport
@@ -133,6 +138,13 @@ MONAD_TESTNET_RPC=https://rpc.ankr.com/monad_testnet forge test --match-path tes
 
 forge fmt --check        # formatting is enforced
 forge test --gas-report  # gas under Monad's opcode pricing
+```
+
+```sh
+# SDK: unit + anvil end-to-end (real contract bytecode from ./out) + read-only checks on live testnet
+cd sdk && npm install && npm test          # LIVE=0 npm test to stay offline
+# worker: end-to-end on anvil with a local static server (decoy spec, skip rules, watch → paid)
+cd worker && npm install && npm test
 ```
 
 What the fork tests prove: the real IdentityRegistry answers `ownerOf`/`getAgentWallet` for
@@ -180,6 +192,41 @@ cast call -r $RPC 0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A \
   "passportOf(uint256)((uint64,uint64,uint64,uint64,uint64,uint128,address))" 1908
 ```
 
+## SDK, reference API and worker
+
+agentfromzero uses all three itself. They are also the three ways to integrate.
+
+**TypeScript: [`sdk/`](sdk)**, published on npm as
+[`@agentfromzero/agentpassport-sdk`](https://www.npmjs.com/package/@agentfromzero/agentpassport-sdk):
+
+```ts
+import { AgentPassportClient, monadTestnet, POLICIES } from "@agentfromzero/agentpassport-sdk";
+const ap = new AgentPassportClient({ publicClient: createPublicClient({ chain: monadTestnet, transport: http(), batch: { multicall: true } }) });
+await ap.meets(1908n, POLICIES.proven);                   // on-chain verdict
+await ap.scorecard(1908n, { minJobsSettled: 1 });         // verdict + rule-by-rule checks + ERC-8004 identity + escrow-backed reputation
+await hirer.hire({ agentId: 1908n, amount: parseUsdc("1"), specHash, endpoint: "scorecard" });
+await hirer.signHire(...); await anyone.openWithAuthorization(params, auth);   // gasless, EIP-3009 (the x402 signature type)
+await hirer.verifyDelivery(jobId) && await hirer.release(jobId);
+```
+
+**HTTP with x402 ([`integrations/netlify-x402`](integrations/netlify-x402)), live at `https://agentfromzero.netlify.app`:**
+
+| Route | Price | |
+|---|---|---|
+| `GET /v1/agent/{agentId}` | free | passport and the `proven` verdict |
+| `POST /v1/agent/verify` `{agentId, policy}` | **0.001 USDC on Monad testnet** (x402 v2, `exact`, Monad facilitator) | full scorecard for any policy; input is validated before payment, and RPC errors are not charged |
+| `GET /.well-known/agent-card.json` | free | agentfromzero's ERC-8004 registration file (also its `tokenURI`) |
+
+A paid call from another wallet settled in
+[`0xf483ff02…e515`](https://testnet.monadvision.com/tx/0xf483ff02db3bdb152c6e17610d8b97e5e5ff414c42cdfb3ee9f2b3b10062e515)
+(see [`docs/DEMO_LOG.md`](docs/DEMO_LOG.md#4-agent-pays-agent-over-x402-2026-09-23)). The client
+is `worker/scripts/verify-paid.ts`.
+
+**The agent loop: [`worker/`](worker).** It watches `JobEscrow`, fetches the spec by hash, runs
+the skill, publishes the deliverable and calls `deliver`. Job #3 was opened gaslessly by the
+hirer, delivered by this worker and released. All of its transactions are in
+[`docs/DEMO_LOG.md`](docs/DEMO_LOG.md#3-job-3--hired-gaslessly-delivered-by-the-worker-2026-09-23).
+
 ## Integrating
 
 Solidity consumers need only the interface:
@@ -209,14 +256,14 @@ entry from `AgentPassport` can always be traced back to the escrow job and its `
 - The passport `owner` is meant to be handed to a timelock or `address(0)` once the attester set
   is final. Not audited; testnet only.
 
-## Sponsor integrations (milestone 2 — placeholders, nothing claimed yet)
+## Sponsor integrations
 
 | Sponsor | Planned use | Status |
 |---|---|---|
 | **Envio HyperIndex** | `indexer/`: Agent / Job / Stamp / Hirer entities plus daily aggregates and a derived score; feeds the explorer page and the SDK's `explain()` | not started |
 | **Nansen** | Label the agent wallet and its hirers in `explain()` / `/verify/:agentId` to expose sybil clusters behind a passport | not started |
 | **Dynamic** | Hirer login with an embedded wallet + delegated release; the agent's `agentWallet` as a server wallet | to be decided (free-plan check) |
-| **x402 (Molandak facilitator)** | `/verify/:agentId` paid per call in USDC; `openWithAuthorization` already accepts the x402 `exact` signature | contract side done |
+| **x402 (Monad facilitator, molandak)** | `POST /v1/agent/verify` paid per call in USDC on Monad testnet; `openWithAuthorization` accepts the x402 `exact` signature type | **live**, paid call settled on chain (DEMO_LOG §4) |
 
 ## AI disclosure
 

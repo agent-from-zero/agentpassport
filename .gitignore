@@ -23,3 +23,9 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# SDK / worker artifacts
+*.tgz
+worker/published/
+worker/worker-state.json
+worker/worker.log
