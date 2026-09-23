@@ -1,3 +1,13 @@
+# Keep LF everywhere: `forge fmt --check` and the Sourcify-verified source hashes depend on exact
+# bytes, and a Windows checkout with core.autocrlf=true would otherwise produce CRLF.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.webp binary
+*.mp4 binary
+
 # Job specs/deliverables are hashed byte-for-byte on-chain (keccak256 == specHash / deliverableHash).
 # Never let git rewrite their line endings.
 docs/jobs/** -text
+**/specs/*.json -text
