@@ -1,0 +1,6 @@
+node_modules/
+.envio/
+generated/
+*.log
+.env
+snapshot/

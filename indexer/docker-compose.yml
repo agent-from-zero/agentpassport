@@ -1,0 +1,85 @@
+# Self-hosted AgentPassport indexer: Postgres + Hasura (GraphQL) + rate-limited RPC proxy + the HyperIndex indexer.
+#   docker compose up -d --build        # GraphQL at http://localhost:8088/v1/graphql
+#   docker compose logs -f indexer
+#   docker compose down                 # keep data;  add -v to wipe and re-index
+# Based on Envio's reference setup (github.com/enviodev/local-docker-example).
+services:
+  postgres:
+    image: postgres:17.5
+    restart: unless-stopped
+    volumes:
+      - agentpassport-index:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${ENVIO_PG_PASSWORD:-testing}
+      POSTGRES_USER: ${ENVIO_PG_USER:-postgres}
+      POSTGRES_DB: ${ENVIO_PG_DATABASE:-envio-dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ENVIO_PG_USER:-postgres}"]
+      interval: 5s
+      retries: 30
+
+  hasura:
+    image: hasura/graphql-engine:v2.43.0
+    restart: unless-stopped
+    ports:
+      - "${HASURA_EXTERNAL_PORT:-8088}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgres://${ENVIO_PG_USER:-postgres}:${ENVIO_PG_PASSWORD:-testing}@postgres:5432/${ENVIO_PG_DATABASE:-envio-dev}
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-testing}
+      HASURA_GRAPHQL_STRINGIFY_NUMERIC_TYPES: "true"
+      # Read-only public role: anyone can query, only the indexer writes.
+      HASURA_GRAPHQL_UNAUTHORIZED_ROLE: public
+      HASURA_GRAPHQL_ENABLED_LOG_TYPES: startup, http-log
+    healthcheck:
+      test: timeout 1s bash -c ':> /dev/tcp/127.0.0.1/8080' || exit 1
+      interval: 5s
+      retries: 50
+
+  rpc-proxy:
+    image: node:24-slim
+    restart: unless-stopped
+    working_dir: /proxy
+    volumes:
+      - ./rpc-proxy:/proxy:ro
+    command: ["node", "proxy.mjs"]
+    environment:
+      UPSTREAMS: ${ENVIO_RPC_UPSTREAMS:-https://10143.rpc.thirdweb.com|4|1000,https://testnet-rpc.monad.xyz|12|100}
+    ports:
+      - "127.0.0.1:8545:8545"
+
+  indexer:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      hasura:
+        condition: service_healthy
+      rpc-proxy:
+        condition: service_started
+    ports:
+      - "127.0.0.1:9898:9898"
+    environment:
+      ENVIO_PG_HOST: postgres
+      ENVIO_PG_PORT: 5432
+      ENVIO_PG_USER: ${ENVIO_PG_USER:-postgres}
+      ENVIO_PG_PASSWORD: ${ENVIO_PG_PASSWORD:-testing}
+      ENVIO_PG_DATABASE: ${ENVIO_PG_DATABASE:-envio-dev}
+      ENVIO_PG_SCHEMA: ${ENVIO_PG_SCHEMA:-public}
+      ENVIO_INDEXER_PORT: 9898
+      HASURA_GRAPHQL_ENDPOINT: http://hasura:8080/v1/metadata
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-testing}
+      HASURA_SERVICE_HOST: hasura
+      HASURA_SERVICE_PORT: 8080
+      ENVIO_TUI: "false"
+      ENVIO_MONAD_RPC_URL: ${ENVIO_MONAD_RPC_URL:-http://rpc-proxy:8545}
+      ENVIO_API_TOKEN: ${ENVIO_API_TOKEN:-}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+volumes:
+  agentpassport-index:

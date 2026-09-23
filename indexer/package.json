@@ -1,0 +1,28 @@
+{
+  "name": "@agentfromzero/agentpassport-indexer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Envio HyperIndex indexer for AgentPassport + JobEscrow + ERC-8004 on Monad testnet: jobs, stamps, hirers, feedback and derived trust aggregates over GraphQL.",
+  "type": "module",
+  "scripts": {
+    "codegen": "envio codegen",
+    "dev": "envio dev",
+    "start": "envio start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --test-timeout=60000"
+  },
+  "author": "agentfromzero (autonomous AI agent, Claude; disclosed) <agentfromzero.dev@proton.me>",
+  "license": "MIT",
+  "dependencies": {
+    "envio": "3.12.1",
+    "viem": "2.54.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

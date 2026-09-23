@@ -1,0 +1,255 @@
+# AgentPassport HyperIndex schema.
+#
+# Raw facts (Job, Stamp, Feedback) are written once per event; aggregates (Agent, Hirer,
+# AgentHirer, AgentDay, ProtocolDay, Protocol) are maintained incrementally by the handlers so a
+# consumer gets a full trust picture of an agent in one GraphQL query, with no client-side scans.
+# Amounts are in the settlement token's smallest unit (Circle USDC, 6 decimals).
+
+enum JobStatus {
+  Open
+  Delivered
+  Released
+  Refunded
+  Disputed
+}
+
+enum Outcome {
+  Settled
+  Refunded
+  Disputed
+}
+
+"How escrowed funds reached the agent."
+enum ReleasePath {
+  Hirer
+  Verifier
+  Passkey
+  ReviewWindow
+}
+
+"Singleton (id = chain id) with protocol-wide totals."
+type Protocol {
+  id: ID!
+  jobsOpened: Int!
+  jobsDelivered: Int!
+  jobsReleased: Int!
+  jobsRefunded: Int!
+  jobsDisputed: Int!
+  gaslessOpens: Int!
+  passkeyReleases: Int!
+  volumeEscrowed: BigInt!
+  volumeSettled: BigInt!
+  agentsSeen: Int!
+  agentsWithStamps: Int!
+  hirers: Int!
+  feedbackTotal: Int!
+  feedbackEscrowBacked: Int!
+  mirrorFailures: Int!
+  lastEventBlock: Int!
+  lastEventAt: Timestamp!
+}
+
+"An ERC-8004 agent (id = agentId as a decimal string) with its escrow-backed trust aggregates."
+type Agent {
+  id: ID!
+  agentId: BigInt!
+  owner: String
+  agentWallet: String
+  agentURI: String
+  registeredAt: Timestamp
+  "True once the agent's Registered event was indexed (false = registered before start_block)."
+  registrationIndexed: Boolean!
+
+  # --- escrow activity ---
+  jobsOpened: Int!
+  jobsDelivered: Int!
+  jobsSettled: Int!
+  jobsRefunded: Int!
+  jobsDisputed: Int!
+  volumeEscrowed: BigInt!
+  volumeSettled: BigInt!
+  firstJobAt: Timestamp
+  lastSettledAt: Timestamp
+  "Seconds from open to deliver, summed over delivered jobs (average = / jobsDelivered)."
+  deliverySecondsTotal: BigInt!
+  avgDeliverySeconds: Int!
+  onTimeDeliveries: Int!
+
+  # --- counterparty structure (sybil resistance) ---
+  "Distinct hirers with at least one settled job."
+  settledHirers: Int!
+  "Distinct hirers with two or more settled jobs (repeat business)."
+  repeatHirers: Int!
+  "Settled volume from the single largest hirer."
+  topHirerVolume: BigInt!
+  "topHirerVolume / volumeSettled in basis points (10000 = one hirer paid everything)."
+  topHirerShareBps: Int!
+
+  # --- ERC-8004 reputation ---
+  feedbackCount: Int!
+  "Feedback written by AgentPassport for a settled/disputed escrow job (money moved)."
+  feedbackEscrowBacked: Int!
+  feedbackRevoked: Int!
+  "Share of the agent's ERC-8004 feedback that is escrow-backed, in basis points."
+  escrowBackedShareBps: Int!
+
+  # --- derived ---
+  "0-100 AgentPassport index score (see src/lib/score.ts; deterministic, recomputed on every change)."
+  score: Int!
+  scoreVersion: Int!
+  lastActivityAt: Timestamp
+
+  jobs: [Job!]! @derivedFrom(field: "agent")
+  stamps: [Stamp!]! @derivedFrom(field: "agent")
+  feedback: [Feedback!]! @derivedFrom(field: "agent")
+  hirers: [AgentHirer!]! @derivedFrom(field: "agent")
+  days: [AgentDay!]! @derivedFrom(field: "agent")
+}
+
+"A wallet that funded at least one escrow job (id = lowercase address)."
+type Hirer {
+  id: ID!
+  jobsOpened: Int!
+  jobsSettled: Int!
+  jobsRefunded: Int!
+  jobsDisputed: Int!
+  volumeEscrowed: BigInt!
+  volumeSettled: BigInt!
+  "Distinct agents this hirer has opened jobs with."
+  agentsHired: Int!
+  "Jobs opened through a relayed EIP-3009 authorization (hirer paid no gas)."
+  gaslessOpens: Int!
+  passkeyRegistered: Boolean!
+  passkeyReleases: Int!
+  firstSeenAt: Timestamp!
+  lastSeenAt: Timestamp!
+  jobs: [Job!]! @derivedFrom(field: "hirer")
+  agents: [AgentHirer!]! @derivedFrom(field: "hirer")
+}
+
+"Relationship between one agent and one hirer (id = agentId-hirer)."
+type AgentHirer @index(fields: ["agent", ["volumeSettled", "DESC"]]) {
+  id: ID!
+  agent: Agent!
+  hirer: Hirer!
+  jobsOpened: Int!
+  jobsSettled: Int!
+  volumeSettled: BigInt!
+  firstAt: Timestamp!
+  lastAt: Timestamp!
+}
+
+"One escrow job (id = jobId)."
+type Job {
+  id: ID!
+  jobId: BigInt!
+  agent: Agent!
+  hirer: Hirer!
+  token: String!
+  amount: BigInt!
+  deadline: Timestamp!
+  specHash: String!
+  endpoint: String!
+  status: JobStatus!
+  "keccak256(abi.encode(escrow, jobId)) - the passport stamp id and the ERC-8004 feedbackHash."
+  jobRef: String!
+  "Opened with openWithAuthorization (EIP-3009 signature relayed by someone else)."
+  gasless: Boolean!
+  openedBy: String!
+  openedAt: Timestamp!
+  openedBlock: Int! @index
+  openTx: String!
+  deliveredAt: Timestamp
+  deliveredBy: String
+  deliverableHash: String
+  deliverableURI: String
+  deliverTx: String
+  deliverySeconds: Int
+  onTime: Boolean
+  closedAt: Timestamp
+  closeTx: String
+  releasedBy: String
+  releasePath: ReleasePath
+  stamp: Stamp
+}
+
+"Lookup from an escrow jobRef to its job (id = jobRef); lets stamps and feedback join to jobs."
+type JobRef {
+  id: ID!
+  job: Job!
+}
+
+"A passport stamp written by an attester (id = jobRef)."
+type Stamp {
+  id: ID!
+  agent: Agent!
+  attester: String!
+  outcome: Outcome!
+  token: String!
+  amount: BigInt!
+  hirer: String!
+  job: Job
+  "Did the mirror into the ERC-8004 ReputationRegistry succeed? (null until FeedbackMirrored is seen)"
+  mirrored: Boolean
+  timestamp: Timestamp!
+  block: Int!
+  tx: String!
+}
+
+"An ERC-8004 feedback entry (id = agentId-client-index)."
+type Feedback {
+  id: ID!
+  agent: Agent!
+  client: String! @index
+  feedbackIndex: BigInt!
+  value: BigInt!
+  valueDecimals: Int!
+  tag1: String!
+  tag2: String!
+  endpoint: String!
+  feedbackURI: String!
+  feedbackHash: String!
+  "Written by the AgentPassport contract and its feedbackHash is a known stamp jobRef."
+  escrowBacked: Boolean!
+  stamp: Stamp
+  revoked: Boolean!
+  timestamp: Timestamp!
+  block: Int!
+  tx: String!
+}
+
+"Per-agent daily roll-up (id = agentId-dayNumber, dayNumber = unix seconds / 86400)."
+type AgentDay @index(fields: ["agent", ["day", "DESC"]]) {
+  id: ID!
+  agent: Agent!
+  day: Int!
+  date: String!
+  jobsOpened: Int!
+  jobsSettled: Int!
+  jobsRefunded: Int!
+  jobsDisputed: Int!
+  volumeSettled: BigInt!
+  feedback: Int!
+}
+
+"Protocol-wide daily roll-up (id = dayNumber)."
+type ProtocolDay {
+  id: ID!
+  day: Int! @index
+  date: String!
+  jobsOpened: Int!
+  jobsSettled: Int!
+  jobsRefunded: Int!
+  jobsDisputed: Int!
+  volumeEscrowed: BigInt!
+  volumeSettled: BigInt!
+  activeAgents: Int!
+  feedback: Int!
+}
+
+"Attester allow-list of the AgentPassport contract (id = attester address)."
+type Attester {
+  id: ID!
+  allowed: Boolean!
+  updatedAt: Timestamp!
+}

@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+#
+# AgentPassport HyperIndex indexer (Envio HyperIndex v3) for Monad testnet (chain 10143).
+#
+# Indexes the whole AgentPassport trust loop:
+#   JobEscrow   -> jobs, hirers, delivery latency, release path (hirer / verifier / passkey / review window)
+#   AgentPassport -> stamps (Settled / Refunded / Disputed) and whether the ERC-8004 mirror succeeded
+#   ERC-8004 IdentityRegistry   -> agents (owner, agentWallet, agent card URI)
+#   ERC-8004 ReputationRegistry -> every feedback entry, split into escrow-backed vs unbacked
+# and derives per-agent trust aggregates (repeat hirers, hirer concentration, escrow-backed share of
+# ERC-8004 feedback, a 0-100 score) that the AgentPassport API and explorer read over GraphQL.
+#
+# Data source: Monad testnet is HyperSync-supported, but HyperSync needs an Envio API token and
+# Envio's dashboard only offers GitHub login (our GitHub account is unavailable), so this indexer
+# uses HyperIndex's RPC data source through rpc-proxy/ (a rate-limited, caching JSON-RPC proxy):
+# HyperIndex runs up to 100 RPC queries in parallel and free public endpoints answer that with
+# HTTP 429. The proxy spreads calls over thirdweb's public Monad RPC (eth_getLogs up to 1,000
+# blocks) and the official one (100 blocks) under per-endpoint rate limits. With an
+# ENVIO_API_TOKEN you can delete the `rpc` block below and HyperIndex switches to HyperSync.
+name: agentpassport
+description: AgentPassport + JobEscrow + ERC-8004 registries on Monad testnet
+address_format: lowercase
+contracts:
+  - name: JobEscrow
+    events:
+      - event: JobOpened(uint256 indexed jobId, uint256 indexed agentId, address indexed hirer, address token, uint256 amount, uint64 deadline, bytes32 specHash, string endpoint)
+      - event: JobDelivered(uint256 indexed jobId, uint256 indexed agentId, bytes32 deliverableHash, string deliverableURI)
+      - event: JobReleased(uint256 indexed jobId, uint256 indexed agentId, address indexed releasedBy, uint256 amount)
+      - event: JobRefunded(uint256 indexed jobId, uint256 indexed agentId, uint256 amount)
+      - event: JobDisputed(uint256 indexed jobId, uint256 indexed agentId, address indexed by)
+      - event: PasskeyRegistered(address indexed hirer, uint256 x, uint256 y)
+  - name: AgentPassport
+    events:
+      - event: Attested(uint256 indexed agentId, address indexed attester, bytes32 indexed jobRef, uint8 outcome, address token, uint256 amount, address hirer)
+      - event: FeedbackMirrored(uint256 indexed agentId, bytes32 indexed jobRef, bool ok)
+      - event: AttesterSet(address indexed attester, bool allowed)
+  - name: IdentityRegistry
+    events:
+      - event: Registered(uint256 indexed agentId, string agentURI, address indexed owner)
+      - event: MetadataSet(uint256 indexed agentId, string indexed indexedMetadataKey, string metadataKey, bytes metadataValue)
+      - event: URIUpdated(uint256 indexed agentId, string newURI, address indexed updatedBy)
+      - event: Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
+  - name: ReputationRegistry
+    events:
+      - event: NewFeedback(uint256 indexed agentId, address indexed clientAddress, uint64 feedbackIndex, int128 value, uint8 valueDecimals, string indexed indexedTag1, string tag1, string tag2, string endpoint, string feedbackURI, bytes32 feedbackHash)
+      - event: FeedbackRevoked(uint256 indexed agentId, address indexed clientAddress, uint64 indexed feedbackIndex)
+chains:
+  - id: 10143 # Monad testnet
+    # AgentPassport + JobEscrow deployment block; ERC-8004 registry activity is indexed from the same
+    # block. Agents registered earlier get their identity from one cached RPC read (src/lib/effects.ts).
+    start_block: 64403471
+    rpc:
+      - url: ${ENVIO_MONAD_RPC_URL:-http://localhost:8545}
+        for: sync
+        initial_block_interval: 1000
+        interval_ceiling: 1000
+        acceleration_additive: 500
+        backoff_multiplicative: 0.5
+        backoff_millis: 2000
+        query_timeout_millis: 120000
+        polling_interval: 2000
+    contracts:
+      - name: JobEscrow
+        address: "0x5b197edD258572DEe7C923A6D38D6Db268A266BC"
+      - name: AgentPassport
+        address: "0xd01EC5Fd5A9A4335D64600aDA4E010AA6fAF9d0A"
+      - name: IdentityRegistry
+        address: "0x8004A818BFB912233c491871b3d84c89A494BD9e"
+      - name: ReputationRegistry
+        address: "0x8004B663056A597Dffe9eCcC1965A193B7388713"
