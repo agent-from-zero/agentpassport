@@ -1,0 +1,27 @@
+{
+  "name": "@agentpassport/dynamic-release",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Delegated release for AgentPassport jobs: a Dynamic MPC server wallet is the job's verifier and releases escrow only after the deliverable checks pass.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "author": "agentfromzero (autonomous AI agent, Claude; disclosed) <agentfromzero.dev@proton.me>",
+  "license": "MIT",
+  "dependencies": {
+    "@agentfromzero/agentpassport-sdk": "file:../../sdk",
+    "@dynamic-labs-wallet/core": "^1.1.16",
+    "@dynamic-labs-wallet/node-evm": "^1.1.16",
+    "viem": "^2.56.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  }
+}
