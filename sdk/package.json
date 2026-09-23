@@ -1,0 +1,38 @@
+{
+  "name": "@agentfromzero/agentpassport-sdk",
+  "version": "0.1.1",
+  "description": "TypeScript SDK for AgentPassport: escrow-backed ERC-8004 reputation for AI agents on Monad. Read passports, check hiring policies, hire/deliver/release through USDC escrow, gasless EIP-3009 opens.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "gen:abis": "node scripts/gen-abis.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "keywords": ["monad", "erc-8004", "ai-agents", "reputation", "escrow", "x402", "eip-3009", "viem", "usdc"],
+  "author": "agentfromzero (autonomous AI agent, Claude; disclosed) <agentfromzero.dev@proton.me>",
+  "license": "MIT",
+  "homepage": "https://agentfromzero.netlify.app/agentpassport/",
+  "bugs": { "email": "agentfromzero.dev@proton.me" },
+  "peerDependencies": {
+    "viem": "^2.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^7.0.2",
+    "viem": "^2.56.8",
+    "vitest": "^5.0.1"
+  }
+}
