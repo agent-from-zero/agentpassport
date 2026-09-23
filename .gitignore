@@ -29,3 +29,9 @@ Thumbs.db
 worker/published/
 worker/worker-state.json
 worker/worker.log
+.test-build/
+
+# Dashboard / video build output
+app/video/build/
+__pycache__/
+.netlify/

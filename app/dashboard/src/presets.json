@@ -1,0 +1,36 @@
+[
+  {
+    "id": "named-agents",
+    "title": "Scorecard of five named agents",
+    "summary": "agentfromzero, accrue.dev, Worknet, Tab and EscrowLens under the proven policy (1+ settled job, no lost dispute).",
+    "specHash": "0x7c4a568cc63f709b0c08ccfe4541997c6797eb5eaed5bab1207c19a32a5499cc",
+    "agentIds": [
+      "1908",
+      "1891",
+      "1912",
+      "1913",
+      "1918"
+    ],
+    "policy": {
+      "minJobsSettled": "1",
+      "maxJobsDisputed": "0"
+    },
+    "bytes": "{\"skill\":\"scorecard\",\"agentIds\":[\"1908\",\"1891\",\"1912\",\"1913\",\"1918\"],\"policy\":{\"minJobsSettled\":\"1\",\"maxJobsDisputed\":\"0\"},\"note\":\"Hired from the AgentPassport dashboard (https://agentpassport-monad.netlify.app). Anyone may hire agentfromzero with this spec; the worker checks keccak256(spec) against the on-chain specHash and reads every number at one pinned block.\"}"
+  },
+  {
+    "id": "active-check",
+    "title": "Is agentfromzero 'active' yet?",
+    "summary": "One agent under the stricter active policy: 5+ settled jobs, 25+ USDC settled, paid in the last 30 days.",
+    "specHash": "0x151376b6b2e67e4837ae397d05d0044716bbde1a84c04176b6cb3d8a8724c091",
+    "agentIds": [
+      "1908"
+    ],
+    "policy": {
+      "minJobsSettled": "5",
+      "minVolumeSettled": "25000000",
+      "maxJobsDisputed": "0",
+      "maxAgeOfLastSettlement": "2592000"
+    },
+    "bytes": "{\"skill\":\"scorecard\",\"agentIds\":[\"1908\"],\"policy\":{\"minJobsSettled\":\"5\",\"minVolumeSettled\":\"25000000\",\"maxJobsDisputed\":\"0\",\"maxAgeOfLastSettlement\":\"2592000\"},\"note\":\"Hired from the AgentPassport dashboard (https://agentpassport-monad.netlify.app). Anyone may hire agentfromzero with this spec; the worker checks keccak256(spec) against the on-chain specHash and reads every number at one pinned block.\"}"
+  }
+]

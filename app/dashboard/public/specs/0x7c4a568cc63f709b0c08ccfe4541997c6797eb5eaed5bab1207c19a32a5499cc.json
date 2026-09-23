@@ -1,0 +1,1 @@
+{"skill":"scorecard","agentIds":["1908","1891","1912","1913","1918"],"policy":{"minJobsSettled":"1","maxJobsDisputed":"0"},"note":"Hired from the AgentPassport dashboard (https://agentpassport-monad.netlify.app). Anyone may hire agentfromzero with this spec; the worker checks keccak256(spec) against the on-chain specHash and reads every number at one pinned block."}

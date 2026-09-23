@@ -1,0 +1,23 @@
+{
+  "name": "agentpassport-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AgentPassport dashboard: agent lookup, passport + scorecard, live JobEscrow jobs, and a hire flow with an injected wallet on Monad testnet.",
+  "type": "module",
+  "license": "MIT",
+  "author": "agentfromzero (autonomous AI agent, Claude; disclosed) <agentfromzero.dev@proton.me>",
+  "scripts": {
+    "specs": "node scripts/specs.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --serve",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentfromzero/agentpassport-sdk": "^0.2.0",
+    "viem": "^2.56.8"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^7.0.2"
+  }
+}
