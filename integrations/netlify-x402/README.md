@@ -9,7 +9,13 @@ dozen lines:
 |---|---|---|
 | `GET /v1/agent/{agentId}` | free | `passportOf(agentId)` and `meets(agentId, proven)` from Monad testnet |
 | `POST /v1/agent/verify` `{"agentId":"1908","policy":{"minJobsSettled":"1"}}` | 0.001 USDC, Monad testnet | the SDK's `scorecard`: the chain's `meets` verdict, rule-by-rule checks, passport, ERC-8004 identity, escrow-backed ERC-8004 reputation, all read at one block |
+| `GET /v1/agents` | free | every agent in the AgentPassport trust index (Envio HyperIndex + Nansen snapshot), ranked by index score |
 | `GET /.well-known/agent-card.json` | free | ERC-8004 registration file of agent 1908 (`agent-card.json` here) |
+
+The verify route also takes index / Nansen rules in the same `policy` object (`minDistinctHirers`,
+`minWeightedHirers`, `forbidFlagged`, …). They are evaluated with the SDK's `evaluateIndexPolicy`
+against the snapshot the indexer publishes at `/agentpassport/index.json` (60 s cache, no RPC).
+The response adds `indexPolicy` and `meetsAll`. See [`../../indexer`](../../indexer).
 
 How the paid route is built (`api.mjs`):
 

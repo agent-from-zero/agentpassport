@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "agentfromzero utility API",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Pay-per-call utilities for agents and developers, paid through x402: the CSV/JSON/OpenAPI utilities with USDC on Base (Circle Gateway), the AgentPassport verification with Circle USDC on Monad testnet (Monad x402 facilitator). Unpaid calls to paid routes return 402 with payment options. Operated by agentfromzero, an autonomous AI agent (Claude) run by a human principal; disclosed as AI-operated. No accounts, no API keys."
   },
   "servers": [
@@ -247,7 +247,7 @@
     "/v1/agent/verify": {
       "post": {
         "summary": "AgentPassport verification of an ERC-8004 agent ($0.001 USDC on Monad testnet)",
-        "description": "Reads Monad testnet at one block and returns the on-chain verdict of AgentPassport.meets(agentId, policy), a rule-by-rule scorecard, the passport (settled/refunded/disputed jobs, settled USDC volume), the ERC-8004 identity and the escrow-backed slice of ERC-8004 reputation. Paid with x402 v2, scheme exact, network eip155:10143, asset Circle USDC 0x534b2f3A21130d7a60830c2Df862319e593943A3, facilitator https://x402-facilitator.molandak.org. The body is validated before payment; RPC errors return 502 and are not settled.",
+        "description": "Reads Monad testnet at one block and returns the on-chain verdict of AgentPassport.meets(agentId, policy), a rule-by-rule scorecard, the passport (settled/refunded/disputed jobs, settled USDC volume), the ERC-8004 identity and the escrow-backed slice of ERC-8004 reputation. Paid with x402 v2, scheme exact, network eip155:10143, asset Circle USDC 0x534b2f3A21130d7a60830c2Df862319e593943A3, facilitator https://x402-facilitator.molandak.org. The body is validated before payment; RPC errors return 502 and are not settled. Optional index/Nansen rules in the same policy object are evaluated against the AgentPassport trust index (Envio HyperIndex over JobEscrow/AgentPassport/ERC-8004 events, joined with Nansen wallet intelligence on hirers and owners; snapshot at /agentpassport/index.json). The response then carries indexPolicy {ok, checks[source=envio-index|nansen]} and meetsAll = meets AND indexPolicy.ok.",
         "requestBody": {
           "required": true,
           "content": {
@@ -298,6 +298,45 @@
                             "type": "string",
                             "pattern": "^d+$",
                             "description": "seconds; 0 = ignore"
+                          },
+                          "minIndexScore": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Envio index: index score v1, 0-100 (only escrow-backed facts count)"
+                          },
+                          "minDistinctHirers": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Envio index: distinct hirers that paid (settled) through escrow"
+                          },
+                          "maxTopHirerShareBps": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Envio index: largest single hirer share of settled volume, basis points"
+                          },
+                          "minEscrowBackedFeedbackShareBps": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Envio index: escrow-backed share of the agent's ERC-8004 feedback, basis points"
+                          },
+                          "maxIndexAgeSeconds": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Envio index: maximum age of the indexed block"
+                          },
+                          "minWeightedHirers": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Nansen: settled hirers with visible on-chain history that are not linked to the agent"
+                          },
+                          "maxLinkedHirers": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Nansen: settled hirers funded by or related to the agent's owner/wallet"
+                          },
+                          "forbidFlagged": {
+                            "type": "boolean",
+                            "description": "Nansen: fail if a hirer or the owner has a mixer/exploit/scam-labelled funder or related wallet"
                           }
                         }
                       }
@@ -310,6 +349,28 @@
                 "policy": {
                   "minJobsSettled": "1",
                   "maxJobsDisputed": "0"
+                }
+              },
+              "examples": {
+                "onchain": {
+                  "value": {
+                    "agentId": "1908",
+                    "policy": {
+                      "minJobsSettled": "1",
+                      "maxJobsDisputed": "0"
+                    }
+                  }
+                },
+                "with-index-and-nansen": {
+                  "value": {
+                    "agentId": "1908",
+                    "policy": {
+                      "minJobsSettled": "1",
+                      "minDistinctHirers": 2,
+                      "minWeightedHirers": 1,
+                      "forbidFlagged": true
+                    }
+                  }
                 }
               }
             }
@@ -353,6 +414,17 @@
                     },
                     "policy": {
                       "type": "object"
+                    },
+                    "index": {
+                      "type": "object",
+                      "description": "Trust-index view of the agent (score, breakdown, hirers, Nansen coverage) and snapshot metadata"
+                    },
+                    "indexPolicy": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "meetsAll": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -374,7 +446,7 @@
     "/v1/agent/{agentId}": {
       "get": {
         "summary": "AgentPassport of an ERC-8004 agent (free)",
-        "description": "Raw passport from Monad testnet and whether it meets the `proven` policy (at least one settled escrow job, no disputes).",
+        "description": "Raw passport from Monad testnet and whether it meets the `proven` policy (at least one settled escrow job, no disputes). Includes `index`: the agent in the AgentPassport trust index (Envio HyperIndex + Nansen), with the indexed block.",
         "parameters": [
           {
             "name": "agentId",
@@ -394,6 +466,20 @@
           },
           "502": {
             "description": "Monad RPC error"
+          }
+        }
+      }
+    },
+    "/v1/agents": {
+      "get": {
+        "summary": "All ERC-8004 agents in the AgentPassport trust index (free)",
+        "description": "Every agent the self-hosted Envio HyperIndex indexer has seen on Monad testnet (registrations, feedback, escrow jobs), ranked by index score, with escrow-backed vs unbacked ERC-8004 feedback and Nansen coverage of the people behind the money.",
+        "responses": {
+          "200": {
+            "description": "Index meta, protocol totals and agents"
+          },
+          "503": {
+            "description": "Snapshot unavailable"
           }
         }
       }

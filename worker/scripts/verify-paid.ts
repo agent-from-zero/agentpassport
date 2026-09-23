@@ -2,7 +2,7 @@
 // 0.001 Circle USDC on Monad testnet with one EIP-3009 signature (no MON needed by the payer; the
 // Monad x402 facilitator settles on chain).
 //
-//   PAYER_PRIVATE_KEY=0x… node scripts/verify-paid.ts [agentId] [url]
+//   PAYER_PRIVATE_KEY=0x… [POLICY='{"minJobsSettled":"1","minWeightedHirers":1}'] node scripts/verify-paid.ts [agentId] [url]
 import { x402Client } from "@x402/core/client";
 import { ExactEvmScheme, toClientEvmSigner } from "@x402/evm";
 import { wrapFetchWithPayment } from "@x402/fetch";
@@ -26,7 +26,7 @@ const payFetch = wrapFetchWithPayment(fetch, client);
 const res = await payFetch(url, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ agentId, policy: { minJobsSettled: "1", maxJobsDisputed: "0" } }),
+  body: JSON.stringify({ agentId, policy: process.env.POLICY ? JSON.parse(process.env.POLICY) : { minJobsSettled: "1", maxJobsDisputed: "0" } }),
 });
 const receipt = res.headers.get("payment-response");
 console.log(JSON.stringify({
