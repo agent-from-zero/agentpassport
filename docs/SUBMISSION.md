@@ -87,7 +87,7 @@ State at the time of writing: `passportOf(1908)` = 5 settled / 1 refunded / 0 di
 
 | Requirement | Status |
 |---|---|
-| Public GitHub repo with complete source | **Pending**: the repo is complete locally (commit history from 2026-09-21), but the GitHub account does not exist yet. See "Open items" |
+| Public GitHub repo with complete source | [github.com/agent-from-zero/agentpassport](https://github.com/agent-from-zero/agentpassport), public, full history from 2026-09-21 (pushed 2026-09-25) |
 | README with setup instructions | [`README.md`](../README.md): Setup, Tests, Deploy (including a dry run), Register, hire by hand, SDK / API / worker, dashboard |
 | OSI license | MIT ([`LICENSE`](../LICENSE)) |
 | Attribution of external code | README "Attribution / external code" (forge-std, viem, esbuild, Playwright, edge-tts, ffmpeg, ERC-8004 interfaces re-declared) |
@@ -97,7 +97,7 @@ State at the time of writing: `passportOf(1908)` = 5 settled / 1 refunded / 0 di
 | Pitch video ≤ 2 min: team, problem, why | Vimeo, 1:56 |
 | Monad integration explained, addresses, deployed to testnet | README "Why Monad", address table, Sourcify-verified contracts, [`deploy/addresses.json`](../deploy/addresses.json) |
 | Documentation: description, architecture, tech stack, setup | README (problem, mermaid architecture, layout, setup); tech stack = Solidity/Foundry, TypeScript/viem, Envio, Netlify functions, x402 |
-| Functioning prototype that a third party can run from the README | Fresh-clone test 2026-09-23 (below) |
+| Functioning prototype that a third party can run from the README | Fresh-clone test 2026-09-23, repeated from GitHub on 2026-09-25 (below) |
 | Problem statement and intended user | README "The problem" (users: agent marketplaces, routers, and agents hiring agents) |
 | Live product link with access instructions | Dashboard (no login); hiring needs testnet MON + USDC from the public faucets |
 | No keys or credentials in the submission | Keys are env-only; a secret scan against the operator's secret store found 0 hits in tracked files |
@@ -146,11 +146,16 @@ Gaps found and fixed:
 3. Before this review, a deploy dry run overwrote the committed `deploy/addresses.json`. Fixed: only
    a broadcast writes it.
 
+Repeated on 2026-09-25 from the public repo (`git clone https://github.com/agent-from-zero/agentpassport`,
+commit 8ca0089): `forge install && forge build` ok, 69 offline / 76 total tests passed, `forge fmt --check` ok,
+the deploy dry run with a new unfunded key simulated against live testnet and left the tree clean, and
+`cd sdk && npm install && LIVE=0 npm test` passed 28 (7 live-only tests skipped). No new gaps.
+
 ## Open items before the form can be submitted
 
-1. **GitHub.** The rules require a public repo that `metropolis@hackathon.monad.xyz` can access.
-   The account `agent-from-zero` does not exist yet: signup needs a human to pass GitHub's
-   verification once (STATUS.md, task 20). The clone URL above assumes that name.
+1. ~~**GitHub.**~~ Done 2026-09-25: the repo is public at
+   https://github.com/agent-from-zero/agentpassport, so `metropolis@hackathon.monad.xyz` can read it
+   without an invite.
 2. The demo video shows the v1 flow, which has no accept step. Everything else in it is unchanged,
    and the change is stated in this document and in the README.
 3. External usage: no third-party hirer or x402 payer is recorded yet ([`TRACTION.md`](TRACTION.md)).
@@ -159,5 +164,5 @@ Gaps found and fixed:
    period resets on 2026-10-21. The sites keep serving. Two things wait on it: the published index
    snapshot (`/agentpassport/index.json` is from block 64,984,982; the fresh one covering v2 is built
    locally), and the worker's deliverable publishing for new jobs. Hosting the deliverables
-   elsewhere (e.g. GitHub Pages once the account exists) would unblock the worker before the
+   elsewhere (e.g. GitHub Pages on the repo's account) would unblock the worker before the
    deadline.
